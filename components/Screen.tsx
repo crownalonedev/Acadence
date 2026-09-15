@@ -1,0 +1,3 @@
+import { PropsWithChildren } from 'react'; import { ScrollView,StyleSheet,View } from 'react-native'; import { SafeAreaView } from 'react-native-safe-area-context'; import { colors } from '@/constants/theme';
+export function Screen({children}:PropsWithChildren){return <SafeAreaView style={s.safe} edges={['top']}><ScrollView contentContainerStyle={s.content} showsVerticalScrollIndicator={false}><View style={s.inner}>{children}</View></ScrollView></SafeAreaView>};
+const s=StyleSheet.create({safe:{flex:1,backgroundColor:colors.background},content:{padding:20,paddingBottom:120,alignItems:'center'},inner:{width:'100%',maxWidth:920}});
