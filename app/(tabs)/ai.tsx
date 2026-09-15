@@ -1,0 +1,1 @@
+import { Sparkles } from 'lucide-react-native'; import { FeatureScreen } from '@/components/FeatureScreen'; export default function AcadenceAI(){return <FeatureScreen icon={Sparkles} title="Acadence" description="Ask questions across your courses, assignments, calendar, and imported class materials."/>}
