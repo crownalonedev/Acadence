@@ -1,2 +1,3 @@
 # Acadence
-Stay in rhythm with college.
+
+A student-first academic hub built with Expo, React Native, and TypeScript.

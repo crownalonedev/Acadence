@@ -1,0 +1,3 @@
+import { Assignment,Course } from '@/types';
+export const courses:Course[]=[{id:'cs201',code:'CS 201',name:'Data Structures',instructor:'Dr. Smith',color:'#5865F2',grade:'A-'},{id:'math202',code:'MATH 202',name:'Calculus II',instructor:'Prof. Lee',color:'#0E9F6E',grade:'B+'},{id:'bio110',code:'BIO 110',name:'General Biology',instructor:'Dr. Rivera',color:'#D97706',grade:'A'}];
+export const assignments:Assignment[]=[{id:'a1',courseId:'cs201',title:'Programming Project #4',dueAt:'Today · 11:59 PM',pointsPossible:100,status:'upcoming'},{id:'a2',courseId:'math202',title:'Problem Set 6',dueAt:'Tomorrow · 11:59 PM',pointsPossible:50,status:'upcoming'},{id:'a3',courseId:'bio110',title:'Quiz 4',dueAt:'Thursday · 2:00 PM',pointsPossible:25,status:'upcoming'}];

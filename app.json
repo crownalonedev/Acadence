@@ -1,0 +1,1 @@
+{"expo":{"name":"Acadence","slug":"acadence","version":"0.1.0","orientation":"portrait","scheme":"acadence","userInterfaceStyle":"automatic","web":{"bundler":"metro"},"plugins":["expo-router"],"experiments":{"typedRoutes":true}}}
