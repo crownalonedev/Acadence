@@ -1,0 +1,1 @@
+import { GraduationCap } from 'lucide-react-native'; import { FeatureScreen } from '@/components/FeatureScreen'; export default function Grades(){return <FeatureScreen icon={GraduationCap} title="Grades" description="Your grades, progress, and what-if calculations will live here."/>}
