@@ -1,2 +1,23 @@
-import { Tabs } from 'expo-router'; import { BookOpen,CalendarDays,CircleUserRound,House,ListTodo } from 'lucide-react-native'; import { colors } from '@/constants/theme';
-export default function TabLayout(){return <Tabs screenOptions={{headerShown:false,tabBarActiveTintColor:colors.accent,tabBarInactiveTintColor:colors.muted,tabBarStyle:{height:82,paddingTop:8,borderTopColor:colors.border,backgroundColor:colors.surface},tabBarLabelStyle:{fontSize:11,fontWeight:'600',paddingBottom:8}}}><Tabs.Screen name="index" options={{title:'Home',tabBarIcon:({color,size})=><House color={color} size={size}/>}}/><Tabs.Screen name="courses" options={{title:'Courses',tabBarIcon:({color,size})=><BookOpen color={color} size={size}/>}}/><Tabs.Screen name="tasks" options={{title:'Tasks',tabBarIcon:({color,size})=><ListTodo color={color} size={size}/>}}/><Tabs.Screen name="calendar" options={{title:'Calendar',tabBarIcon:({color,size})=><CalendarDays color={color} size={size}/>}}/><Tabs.Screen name="settings" options={{title:'You',tabBarIcon:({color,size})=><CircleUserRound color={color} size={size}/>}}/></Tabs>}
+import { Tabs } from 'expo-router';
+import { colors } from '@/constants/theme';
+import { navigationItems, NavigationItemId } from '@/constants/navigation';
+import { NavigationProvider, useNavigationPreferences } from '@/context/NavigationContext';
+
+const routes: NavigationItemId[] = ['home', 'courses', 'tasks', 'calendar', 'grades', 'inbox', 'files', 'ai', 'profile'];
+
+function ConfigurableTabs() {
+  const { items } = useNavigationPreferences();
+  return (
+    <Tabs screenOptions={{ headerShown: false, tabBarActiveTintColor: colors.accent, tabBarInactiveTintColor: colors.muted, tabBarStyle: { height: 82, paddingTop: 8, borderTopColor: colors.border, backgroundColor: colors.surface }, tabBarLabelStyle: { fontSize: 11, fontWeight: '600', paddingBottom: 8 } }}>
+      {routes.map((id) => {
+        const item = navigationItems[id];
+        const Icon = item.icon;
+        return <Tabs.Screen key={id} name={item.route} options={{ title: item.label, href: items.includes(id) ? undefined : null, tabBarIcon: ({ color, size }) => <Icon color={color} size={size} strokeWidth={2} /> }} />;
+      })}
+    </Tabs>
+  );
+}
+
+export default function TabLayout() {
+  return <NavigationProvider><ConfigurableTabs /></NavigationProvider>;
+}
