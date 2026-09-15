@@ -1,0 +1,1 @@
+import { FileText } from 'lucide-react-native'; import { FeatureScreen } from '@/components/FeatureScreen'; export default function Files(){return <FeatureScreen icon={FileText} title="Files" description="Lecture slides, syllabi, PDFs, documents, and imported course material in one searchable library."/>}
