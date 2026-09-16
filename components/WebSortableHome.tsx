@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
@@ -15,13 +15,8 @@ function SortableWidget({ id, onRemove, children, accent, danger, surface, borde
 
 export function WebSortableHome({ items, setItems, hide, renderWidget, colors }: { items: HomeWidgetId[]; setItems: (items: HomeWidgetId[]) => void; hide: (id: HomeWidgetId) => void; renderWidget: (id: HomeWidgetId) => React.ReactNode; colors: any }) {
   const [active, setActive] = useState<HomeWidgetId | null>(null);
-  const [overlayWidth, setOverlayWidth] = useState(0);
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
-  const start = (e: DragStartEvent) => {
-    setOverlayWidth(containerRef.current?.getBoundingClientRect().width ?? 0);
-    setActive(e.active.id as HomeWidgetId);
-  };
+  const start = (e: DragStartEvent) => setActive(e.active.id as HomeWidgetId);
   const end = (e: DragEndEvent) => {
     setActive(null);
     const { active: dragged, over } = e;
@@ -30,7 +25,7 @@ export function WebSortableHome({ items, setItems, hide, renderWidget, colors }:
     const to = items.indexOf(over.id as HomeWidgetId);
     if (from >= 0 && to >= 0) setItems(arrayMove(items, from, to));
   };
-  return <div ref={containerRef} style={{ position: 'relative', width: '100%', overflow: 'hidden', paddingTop: 4, paddingBottom: 4 }}><DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[restrictToVerticalAxis, restrictToParentElement]} onDragStart={start} onDragEnd={end} onDragCancel={() => setActive(null)}><SortableContext items={items} strategy={verticalListSortingStrategy}>{items.map((id) => <SortableWidget key={id} id={id} onRemove={hide} accent={colors.accent} danger={colors.danger} surface={colors.surface} border={colors.border}>{renderWidget(id)}</SortableWidget>)}</SortableContext><DragOverlay modifiers={[restrictToVerticalAxis]} dropAnimation={{ duration: 160, easing: 'ease-out' }} style={{ width: overlayWidth || undefined }}><div style={{ width: overlayWidth || '100%', maxWidth: overlayWidth || '100%', boxSizing: 'border-box', pointerEvents: 'none' }}><View style={[s.overlay, { backgroundColor: colors.background, borderColor: colors.accent }]}>{active ? renderWidget(active) : null}</View></div></DragOverlay></DndContext></div>;
+  return <div style={{ position: 'relative', width: '100%', overflow: 'hidden', paddingTop: 4, paddingBottom: 4 }}><DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[restrictToVerticalAxis, restrictToParentElement]} onDragStart={start} onDragEnd={end} onDragCancel={() => setActive(null)}><SortableContext items={items} strategy={verticalListSortingStrategy}>{items.map((id) => <SortableWidget key={id} id={id} onRemove={hide} accent={colors.accent} danger={colors.danger} surface={colors.surface} border={colors.border}>{renderWidget(id)}</SortableWidget>)}</SortableContext><DragOverlay modifiers={[restrictToVerticalAxis]} dropAnimation={{ duration: 160, easing: 'ease-out' }}><div style={{ width: '100%', boxSizing: 'border-box', pointerEvents: 'none' }}><View style={[s.overlay, { backgroundColor: colors.background, borderColor: colors.accent }]}>{active ? renderWidget(active) : null}</View></div></DragOverlay></DndContext></div>;
 }
 
 const s = StyleSheet.create({
