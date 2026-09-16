@@ -1,23 +1,11 @@
 import 'dotenv/config';
-import crypto from 'node:crypto';
 import express from 'express';
 import cors from 'cors';
-
-const app=express();
-const port=Number(process.env.PORT||8787);
-const states=new Map();
-const sessions=new Map();
-app.use(cors({origin:true,credentials:true}));
-app.use(express.json());
-
-const normalize=(value='')=>{const raw=value.trim().replace(/\/$/,'');if(!raw)return '';const withProtocol=/^https?:\/\//i.test(raw)?raw:`https://${raw}`;const url=new URL(withProtocol);if(url.protocol!=='https:'&&url.hostname!=='localhost')throw new Error('Canvas must use HTTPS.');return url.origin};
-const config=()=>{if(!process.env.CANVAS_CLIENT_ID||!process.env.CANVAS_CLIENT_SECRET||!process.env.CANVAS_REDIRECT_URI)throw new Error('Canvas OAuth is not configured on the Acadence server.');return {id:process.env.CANVAS_CLIENT_ID,secret:process.env.CANVAS_CLIENT_SECRET,redirect:process.env.CANVAS_REDIRECT_URI}};
-const canvasFetch=async(session,path)=>{const response=await fetch(`${session.baseUrl}/api/v1${path}`,{headers:{Authorization:`Bearer ${session.accessToken}`}});if(!response.ok)throw new Error(`Canvas request failed (${response.status})`);return response.json()};
-
-app.get('/health',(_req,res)=>res.json({ok:true}));
-app.get('/api/canvas/connect',(req,res)=>{try{const baseUrl=normalize(String(req.query.baseUrl||''));if(!baseUrl)return res.status(400).json({error:'Canvas URL is required.'});const {id,redirect}=config();const state=crypto.randomBytes(24).toString('hex');states.set(state,{baseUrl,createdAt:Date.now()});const url=new URL(`${baseUrl}/login/oauth2/auth`);url.searchParams.set('client_id',id);url.searchParams.set('response_type','code');url.searchParams.set('redirect_uri',redirect);url.searchParams.set('state',state);res.json({authorizeUrl:url.toString()})}catch(error){res.status(400).json({error:error instanceof Error?error.message:'Unable to start Canvas OAuth.'})}});
-app.get('/api/canvas/callback',async(req,res)=>{const state=String(req.query.state||''),code=String(req.query.code||'');const pending=states.get(state);states.delete(state);if(!pending||!code)return res.status(400).send('Invalid or expired Canvas authorization.');try{const {id,secret,redirect}=config();const tokenResponse=await fetch(`${pending.baseUrl}/login/oauth2/token`,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:new URLSearchParams({grant_type:'authorization_code',client_id:id,client_secret:secret,redirect_uri:redirect,code})});if(!tokenResponse.ok)throw new Error(`Token exchange failed (${tokenResponse.status})`);const token=await tokenResponse.json();const sessionId=crypto.randomBytes(32).toString('hex');sessions.set(sessionId,{baseUrl:pending.baseUrl,accessToken:token.access_token,refreshToken:token.refresh_token,expiresAt:token.expires_in?Date.now()+token.expires_in*1000:null});const appUrl=process.env.APP_URL||'http://localhost:8081';res.redirect(`${appUrl}/settings?canvas=connected&session=${encodeURIComponent(sessionId)}`)}catch(error){res.status(500).send(error instanceof Error?error.message:'Canvas authorization failed.')}});
-app.get('/api/canvas/status',async(req,res)=>{const session=sessions.get(String(req.query.session||''));if(!session)return res.status(401).json({connected:false});try{const [profile,courses]=await Promise.all([canvasFetch(session,'/users/self/profile'),canvasFetch(session,'/courses?enrollment_state=active&per_page=100')]);res.json({connected:true,baseUrl:session.baseUrl,profile:{id:profile.id,name:profile.name,shortName:profile.short_name},courseCount:Array.isArray(courses)?courses.length:0})}catch(error){res.status(502).json({error:error instanceof Error?error.message:'Canvas sync failed.'})}});
-app.get('/api/canvas/sync',async(req,res)=>{const session=sessions.get(String(req.query.session||''));if(!session)return res.status(401).json({error:'Canvas session expired.'});try{const courses=await canvasFetch(session,'/courses?enrollment_state=active&per_page=100');const assignments=[];for(const course of courses){try{const rows=await canvasFetch(session,`/courses/${course.id}/assignments?bucket=upcoming&per_page=100`);for(const a of rows)assignments.push({id:a.id,courseId:course.id,name:a.name,dueAt:a.due_at,pointsPossible:a.points_possible,htmlUrl:a.html_url})}catch{}}res.json({courses:courses.map(c=>({id:c.id,name:c.name,courseCode:c.course_code,startAt:c.start_at,endAt:c.end_at})),assignments})}catch(error){res.status(502).json({error:error instanceof Error?error.message:'Canvas sync failed.'})}});
-app.post('/api/canvas/disconnect',(req,res)=>{sessions.delete(String(req.body?.session||''));res.json({ok:true})});
+const app=express();const port=Number(process.env.PORT||8787);let latest=null;
+app.use(cors({origin:true}));app.use(express.json({limit:'2mb'}));
+app.get('/health',(_req,res)=>res.json({ok:true,connector:true}));
+app.post('/api/connector/sync',(req,res)=>{const data=req.body;if(data?.source!=='canvas'||!data?.canvasOrigin||!Array.isArray(data?.courses)||!Array.isArray(data?.assignments))return res.status(400).json({error:'Invalid Canvas connector payload.'});latest={...data,receivedAt:new Date().toISOString()};res.json({ok:true,courseCount:data.courses.length,assignmentCount:data.assignments.length,syncedAt:latest.receivedAt})});
+app.get('/api/connector/status',(_req,res)=>{if(!latest)return res.json({connected:false});res.json({connected:true,canvasOrigin:latest.canvasOrigin,profile:latest.profile,courseCount:latest.courses.length,assignmentCount:latest.assignments.length,syncedAt:latest.receivedAt})});
+app.get('/api/connector/data',(_req,res)=>{if(!latest)return res.status(404).json({error:'No Canvas data has been synced yet.'});res.json(latest)});
+app.post('/api/connector/disconnect',(_req,res)=>{latest=null;res.json({ok:true})});
 app.listen(port,()=>console.log(`Acadence server listening on http://localhost:${port}`));
