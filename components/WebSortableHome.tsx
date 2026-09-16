@@ -13,15 +13,17 @@ function SortableWidget({ id, onRemove, children, accent, danger, surface, borde
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
       <View style={[s.frame, { borderColor: accent }]}>
-        <Pressable onPress={() => onRemove(id)} hitSlop={8} style={[s.remove, { backgroundColor: danger }]}>
-          <Minus size={12} strokeWidth={3} color="#fff" />
-        </Pressable>
-        <div {...listeners} aria-label="Drag widget" style={{ position: 'absolute', right: 12, top: 12, zIndex: 60, cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none', borderRadius: 9 }}>
-          <View style={[s.grip, { backgroundColor: surface, borderColor: border }]}>
-            <GripVertical size={17} strokeWidth={2.2} color={accent} />
-          </View>
-        </div>
-        {children}
+        <View style={s.editRail}>
+          <Pressable onPress={() => onRemove(id)} hitSlop={7} style={[s.remove, { backgroundColor: danger }]}>
+            <Minus size={11} strokeWidth={3} color="#fff" />
+          </Pressable>
+          <div {...listeners} aria-label="Drag widget" style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none', borderRadius: 8 }}>
+            <View style={[s.grip, { backgroundColor: surface, borderColor: border }]}>
+              <GripVertical size={16} strokeWidth={2.2} color={accent} />
+            </View>
+          </div>
+        </View>
+        <View style={s.content}>{children}</View>
       </View>
     </div>
   );
@@ -54,8 +56,10 @@ export function WebSortableHome({ items, setItems, hide, renderWidget, colors }:
 }
 
 const s = StyleSheet.create({
-  frame: { position: 'relative', borderWidth: 1, borderRadius: 16, padding: 8, paddingTop: 10, marginBottom: 10 },
-  remove: { position: 'absolute', zIndex: 70, left: 12, top: 12, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 4px rgba(85,30,30,.18)' as any },
-  grip: { width: 30, height: 30, borderRadius: 9, borderWidth: 1, alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 5px rgba(20,35,28,.08)' as any },
+  frame: { position: 'relative', borderWidth: 1, borderRadius: 16, padding: 8, marginBottom: 10 },
+  editRail: { height: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 2, marginBottom: 4 },
+  content: { width: '100%' },
+  remove: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 4px rgba(85,30,30,.16)' as any },
+  grip: { width: 28, height: 28, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 4px rgba(20,35,28,.07)' as any },
   overlay: { width: '100%', borderWidth: 1, borderRadius: 16, padding: 8, opacity: 0.96, boxShadow: '0 16px 40px rgba(20,35,28,.16)' as any },
 });
