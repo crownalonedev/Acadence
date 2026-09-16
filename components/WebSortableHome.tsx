@@ -8,15 +8,16 @@ import { HomeWidgetId } from '@/context/HomeLayoutContext';
 
 function SortableWidget({ id, onRemove, children, accent, danger, surface, border }: { id: HomeWidgetId; onRemove: (id: HomeWidgetId) => void; children: React.ReactNode; accent: string; danger: string; surface: string; border: string }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-  const verticalTransform = transform ? { ...transform, x: 0 } : null;
+  const verticalTransform = transform ? { x: 0, y: transform.y, scaleX: 1, scaleY: 1 } : null;
   const style: any = {
     transform: CSS.Transform.toString(verticalTransform),
-    transition,
+    transition: isDragging ? undefined : transition,
     zIndex: isDragging ? 100 : 1,
     position: 'relative',
     width: '100%',
-    opacity: isDragging ? 0.96 : 1,
-    boxShadow: isDragging ? '0 14px 34px rgba(20,35,28,.14)' : 'none',
+    opacity: isDragging ? 0.98 : 1,
+    boxShadow: isDragging ? '0 12px 30px rgba(20,35,28,.12)' : 'none',
+    willChange: 'transform',
   };
   return <div ref={setNodeRef} style={style} {...attributes}><View style={[s.frame, { borderColor: accent }]}><View style={s.editRail}><Pressable onPress={() => onRemove(id)} hitSlop={7} style={[s.remove, { backgroundColor: danger }]}><Minus size={11} strokeWidth={3} color="#fff" /></Pressable><div {...listeners} aria-label="Drag widget" style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none', borderRadius: 8 }}><View style={[s.grip, { backgroundColor: surface, borderColor: border }]}><GripVertical size={16} strokeWidth={2.2} color={accent} /></View></div></View><View style={s.content}>{children}</View></View></div>;
 }
