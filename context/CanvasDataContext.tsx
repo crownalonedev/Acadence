@@ -1,0 +1,8 @@
+import { createContext,PropsWithChildren,useCallback,useContext,useEffect,useMemo,useState } from 'react';
+const API=(process.env.EXPO_PUBLIC_ACADENCE_API_URL||'http://localhost:8787').replace(/\/$/,'');
+export type SyncedCourse={id:string|number;name:string;courseCode?:string;color?:string};
+export type SyncedAssignment={id:string|number;courseId:string|number;name:string;dueAt?:string|null;pointsPossible?:number|null;htmlUrl?:string};
+type CanvasData={connected:boolean;canvasOrigin?:string;profile?:any;courses:SyncedCourse[];assignments:SyncedAssignment[];syncedAt?:string;loading:boolean;refresh:()=>Promise<void>};
+const C=createContext<CanvasData|null>(null);
+export function CanvasDataProvider({children}:PropsWithChildren){const [data,setData]=useState<Omit<CanvasData,'loading'|'refresh'>>({connected:false,courses:[],assignments:[]});const [loading,setLoading]=useState(true);const refresh=useCallback(async()=>{setLoading(true);try{const r=await fetch(`${API}/api/connector/data`);if(!r.ok){setData({connected:false,courses:[],assignments:[]});return}const d=await r.json();setData({connected:true,canvasOrigin:d.canvasOrigin,profile:d.profile,courses:d.courses||[],assignments:d.assignments||[],syncedAt:d.receivedAt})}catch{setData({connected:false,courses:[],assignments:[]})}finally{setLoading(false)}},[]);useEffect(()=>{refresh();const id=setInterval(refresh,15000);return()=>clearInterval(id)},[refresh]);const value=useMemo(()=>({...data,loading,refresh}),[data,loading,refresh]);return <C.Provider value={value}>{children}</C.Provider>}
+export function useCanvasData(){const v=useContext(C);if(!v)throw new Error('useCanvasData must be inside CanvasDataProvider');return v}
