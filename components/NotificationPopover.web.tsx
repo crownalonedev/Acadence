@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowUpRight, RotateCcw } from 'lucide-react';
+import { ArrowUpRight, RotateCcw } from 'lucide-react-native';
 import { useAppTheme } from '@/context/ThemeContext';
 
 type Notice={id:string;title:string;subtitle:string;time:string;count?:number;read:boolean};
@@ -17,16 +17,16 @@ export function NotificationPopover({visible,onClose}:{visible:boolean;onClose:(
   if(!visible||typeof document==='undefined')return null;
   const mark=(id:string)=>setNotices(v=>v.map(n=>n.id===id?{...n,read:true}:n));
   const panel=(
-    <div onMouseEnter={()=>setExpanded(true)} onMouseLeave={()=>setExpanded(false)} style={{position:'fixed',inset:0,zIndex:2147483647,pointerEvents:'none'}}>
+    <div style={{position:'fixed',inset:0,zIndex:2147483647,pointerEvents:'none'}}>
       <button aria-label="Close notifications" onClick={onClose} style={{position:'absolute',inset:0,border:0,padding:0,background:'rgba(20,35,28,.025)',pointerEvents:'auto',cursor:'default'}}/>
-      <div style={{position:'absolute',right:28,top:92,width:320,maxWidth:'calc(100vw - 32px)',padding:12,borderRadius:24,background:colors.border,boxShadow:'0 18px 48px rgba(20,35,28,.16)',pointerEvents:'auto'}}>
+      <div onMouseEnter={()=>setExpanded(true)} onMouseLeave={()=>setExpanded(false)} style={{position:'absolute',right:28,top:92,width:320,maxWidth:'calc(100vw - 32px)',padding:12,borderRadius:24,background:colors.border,boxShadow:'0 18px 48px rgba(20,35,28,.16)',pointerEvents:'auto'}}>
         <div>
           {notices.map((n,i)=><div key={n.id} onClick={()=>mark(n.id)} style={{position:'relative',zIndex:notices.length-i,marginTop:i===0?0:expanded?4:-44,transform:`scaleX(${expanded?1:1-i*.05})`,transformOrigin:'center top',padding:'10px 16px',borderRadius:12,background:colors.surface,boxShadow:expanded?'0 8px 20px rgba(20,35,28,.10)':'0 2px 7px rgba(20,35,28,.06)',transition:`margin-top 420ms ${spring}, transform 420ms ${spring}, box-shadow 200ms ease`,cursor:'pointer'}}>
-            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}><span style={{fontSize:14,fontWeight:600,color:colors.text}}>{n.title}</span>{n.count&&<span style={{display:'flex',alignItems:'center',gap:2,fontSize:12,fontWeight:600,color:colors.muted}}><RotateCcw size={12}/>{n.count}</span>}</div>
+            <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',gap:8}}><span style={{fontSize:14,fontWeight:600,color:colors.text}}>{n.title}</span>{n.count&&<span style={{display:'flex',alignItems:'center',gap:2,fontSize:12,fontWeight:600,color:colors.muted}}><RotateCcw size={12} color={colors.muted}/>{n.count}</span>}</div>
             <div style={{fontSize:12,fontWeight:500,color:colors.muted,marginTop:2,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}><span>{n.time}</span><span> · </span><span>{n.subtitle}</span></div>
           </div>)}
         </div>
-        <div style={{display:'flex',alignItems:'center',gap:8,marginTop:12}}><div style={{width:20,height:20,borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:600,color:'#fff',background:colors.muted}}>{notices.length}</div><div style={{display:'grid',fontSize:14,fontWeight:600,color:colors.muted}}><span style={{gridArea:'1 / 1',opacity:expanded?0:1,transform:`translateY(${expanded?-16:0}px)`,transition:'opacity 220ms ease-in-out, transform 220ms ease-in-out',pointerEvents:expanded?'none':'auto'}}>Notifications</span><span style={{gridArea:'1 / 1',display:'flex',alignItems:'center',gap:4,opacity:expanded?1:0,transform:`translateY(${expanded?0:16}px)`,transition:'opacity 220ms ease-in-out, transform 220ms ease-in-out',pointerEvents:expanded?'auto':'none'}}>View all <ArrowUpRight size={16}/></span></div></div>
+        <div style={{display:'flex',alignItems:'center',gap:8,marginTop:12}}><div style={{width:20,height:20,borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,fontWeight:600,color:'#fff',background:colors.muted}}>{notices.length}</div><div style={{display:'grid',fontSize:14,fontWeight:600,color:colors.muted}}><span style={{gridArea:'1 / 1',opacity:expanded?0:1,transform:`translateY(${expanded?-16:0}px)`,transition:'opacity 220ms ease-in-out, transform 220ms ease-in-out',pointerEvents:expanded?'none':'auto'}}>Notifications</span><span style={{gridArea:'1 / 1',display:'flex',alignItems:'center',gap:4,opacity:expanded?1:0,transform:`translateY(${expanded?0:16}px)`,transition:'opacity 220ms ease-in-out, transform 220ms ease-in-out',pointerEvents:expanded?'auto':'none'}}>View all <ArrowUpRight size={16} color={colors.muted}/></span></div></div>
       </div>
     </div>
   );
