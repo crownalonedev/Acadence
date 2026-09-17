@@ -82,23 +82,48 @@ async function collectCanvasData() {
       return null;
     }
   };
-  const courseGradeSummary = (course, enrollmentState) => {
-    const e = enrollmentFor(course);
+  const enrollmentGradeSummary = (enrollment) => ({
+    currentScore:
+      enrollment?.computed_current_score ??
+      enrollment?.current_grading_period_score ??
+      enrollment?.grades?.current_score ??
+      enrollment?.grades?.unposted_current_score ??
+      null,
+    currentGrade:
+      enrollment?.computed_current_grade ??
+      enrollment?.current_grading_period_grade ??
+      enrollment?.grades?.current_grade ??
+      enrollment?.grades?.unposted_current_grade ??
+      null,
+    finalScore:
+      enrollment?.computed_final_score ??
+      enrollment?.grades?.final_score ??
+      enrollment?.grades?.unposted_final_score ??
+      null,
+    finalGrade:
+      enrollment?.computed_final_grade ??
+      enrollment?.grades?.final_grade ??
+      enrollment?.grades?.unposted_final_grade ??
+      null,
+  });
+  const courseGradeSummary = (course, enrollmentState, enrollmentOverride) => {
+    const e = enrollmentOverride || enrollmentFor(course),
+      gradeSummary = enrollmentGradeSummary(e),
+      id = String(course?.id ?? e?.course_id ?? "");
     return {
-      id: String(course.id),
-      name: course.name,
-      courseCode: course.course_code,
+      id,
+      name:
+        course?.name ||
+        course?.course_name ||
+        e?.course_name ||
+        (id ? `Previous course ${id}` : "Previous course"),
+      courseCode: course?.course_code || e?.course_code,
       imageUrl: courseImageUrl(course),
-      startAt: course.start_at,
-      endAt: course.end_at,
-      termName: course.term?.name || null,
+      startAt: course?.start_at || e?.start_at || null,
+      endAt: course?.end_at || e?.end_at || null,
+      termName: course?.term?.name || e?.term?.name || null,
       enrollmentState,
-      currentScore:
-        e?.computed_current_score ?? e?.current_grading_period_score ?? null,
-      currentGrade:
-        e?.computed_current_grade ?? e?.current_grading_period_grade ?? null,
-      finalScore: e?.computed_final_score ?? null,
-      finalGrade: e?.computed_final_grade ?? null,
+      ...gradeSummary,
     };
   };
 
@@ -106,24 +131,92 @@ async function collectCanvasData() {
   const courses = await list(
     "/api/v1/courses?enrollment_state=active&include[]=total_scores&include[]=current_grading_period_scores&include[]=syllabus_body&include[]=term&include[]=course_image&per_page=100",
   );
+
   let historicalCourseRows = [],
-    historicalCoursesComplete = false;
+    historicalEnrollmentRows = [],
+    historicalCourseRowsComplete = false,
+    historicalEnrollmentsComplete = false;
   try {
     historicalCourseRows = await list(
       "/api/v1/courses?enrollment_state=completed&include[]=total_scores&include[]=term&include[]=course_image&per_page=100",
     );
-    historicalCoursesComplete = true;
+    historicalCourseRowsComplete = true;
   } catch {
-    /* Some Canvas instances restrict concluded-course history. Keep the prior snapshot. */
+    /* Some Canvas instances hide concluded courses from the Courses API. */
   }
-  const activeCourseIds = new Set(courses.map((course) => String(course.id)));
-  const historicalCourses = historicalCourseRows
-    .filter((course) => !activeCourseIds.has(String(course.id)))
-    .map((course) => courseGradeSummary(course, "completed"))
-    .sort(
-      (a, b) =>
-        Date.parse(b.endAt || b.startAt || 0) - Date.parse(a.endAt || a.startAt || 0),
+  try {
+    historicalEnrollmentRows = await list(
+      "/api/v1/users/self/enrollments?state[]=completed&state[]=inactive&per_page=100",
     );
+    historicalEnrollmentsComplete = true;
+  } catch {
+    /* The enrollment-history fallback can also be restricted by an institution. */
+  }
+
+  const activeCourseIds = new Set(courses.map((course) => String(course.id)));
+  const historicalById = new Map();
+  for (const course of historicalCourseRows) {
+    const id = String(course?.id ?? "");
+    if (!id || activeCourseIds.has(id)) continue;
+    historicalById.set(id, courseGradeSummary(course, "completed"));
+  }
+
+  for (const enrollment of historicalEnrollmentRows) {
+    const courseId = String(enrollment?.course_id ?? "");
+    if (!courseId || activeCourseIds.has(courseId)) continue;
+
+    let courseDetail = historicalCourseRows.find(
+      (course) => String(course?.id) === courseId,
+    );
+    if (!courseDetail) {
+      try {
+        const detail = await (
+          await request(
+            `/api/v1/courses/${courseId}?include[]=term&include[]=course_image`,
+          )
+        ).json();
+        if (detail && !Array.isArray(detail) && detail.id != null) courseDetail = detail;
+      } catch {
+        /* A concluded course can be hidden while its enrollment/grade remains visible. */
+      }
+    }
+
+    const fromEnrollment = courseGradeSummary(
+      courseDetail || { id: courseId },
+      "completed",
+      enrollment,
+    );
+    const existing = historicalById.get(courseId);
+    historicalById.set(
+      courseId,
+      existing
+        ? {
+            ...fromEnrollment,
+            ...existing,
+            currentScore: existing.currentScore ?? fromEnrollment.currentScore,
+            currentGrade: existing.currentGrade ?? fromEnrollment.currentGrade,
+            finalScore: existing.finalScore ?? fromEnrollment.finalScore,
+            finalGrade: existing.finalGrade ?? fromEnrollment.finalGrade,
+            name:
+              existing.name && !existing.name.startsWith("Previous course ")
+                ? existing.name
+                : fromEnrollment.name,
+            courseCode: existing.courseCode || fromEnrollment.courseCode,
+            imageUrl: existing.imageUrl || fromEnrollment.imageUrl,
+            startAt: existing.startAt || fromEnrollment.startAt,
+            endAt: existing.endAt || fromEnrollment.endAt,
+            termName: existing.termName || fromEnrollment.termName,
+          }
+        : fromEnrollment,
+    );
+  }
+
+  const historicalCourses = [...historicalById.values()].sort(
+    (a, b) =>
+      Date.parse(b.endAt || b.startAt || 0) - Date.parse(a.endAt || a.startAt || 0),
+  );
+  const historicalCoursesComplete =
+    historicalCourseRowsComplete || historicalEnrollmentsComplete;
 
   const assignments = [],
     announcements = [],
