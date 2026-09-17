@@ -3,6 +3,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ArrowLeft,
+  ArrowRight,
   ArrowUpRight,
   BookOpen,
   CalendarClock,
@@ -15,6 +16,7 @@ import {
   GraduationCap,
   Layers3,
   Megaphone,
+  ScrollText,
 } from 'lucide-react-native';
 import Animated, { FadeInDown, Layout } from 'react-native-reanimated';
 import { Screen } from '@/components/Screen';
@@ -27,6 +29,7 @@ const fallback =
   'https://images.unsplash.com/photo-1456324504439-367cee3b3c32?auto=format&fit=crop&w=1400&q=80';
 const TABS = [
   ['overview', 'Overview', BookOpen],
+  ['syllabus', 'Syllabus', ScrollText],
   ['modules', 'Modules', Layers3],
   ['assignments', 'Assignments', CheckCircle2],
   ['announcements', 'Announcements', Megaphone],
@@ -121,11 +124,9 @@ function syllabusSections(html?: string): SyllabusSection[] {
     }
   }
   push();
-
-  if (!sections.length) {
-    return [{ title: 'Course syllabus', paragraphs: [plainText(html)], bullets: [] }];
-  }
-  return sections.filter((section) => section.paragraphs.length || section.bullets.length);
+  return sections.length
+    ? sections.filter((section) => section.paragraphs.length || section.bullets.length)
+    : [{ title: 'Course syllabus', paragraphs: [plainText(html)], bullets: [] }];
 }
 
 function formatFileSize(value?: number) {
@@ -151,7 +152,11 @@ function dueInfo(value?: string | null) {
   else if (diff < day * 7) label = `Due in ${Math.max(1, Math.ceil(diff / day))} days`;
   return {
     label,
-    date: due.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: due.getFullYear() !== now.getFullYear() ? 'numeric' : undefined }),
+    date: due.toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: due.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+    }),
     time: due.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
     past: diff < 0,
     soon: diff >= 0 && diff < day * 2,
@@ -239,7 +244,13 @@ export default function CourseDetail() {
         : due.soon
           ? `${colors.warning}18`
           : colors.accentSoft;
-    const chipColor = complete ? colors.accent : due.past ? colors.danger : due.soon ? colors.warning : colors.accent;
+    const chipColor = complete
+      ? colors.accent
+      : due.past
+        ? colors.danger
+        : due.soon
+          ? colors.warning
+          : colors.accent;
     return (
       <Pressable
         onPress={() => open(a.htmlUrl)}
@@ -264,7 +275,7 @@ export default function CourseDetail() {
           <CalendarClock size={15} color={chipColor} />
           <View>
             <Text style={[s.dueLabel, { color: chipColor }]}>{complete ? 'Completed' : due.label}</Text>
-            <Text style={[s.dueExact, { color: colors.muted }]}>
+            <Text style={[s.dueExact, { color: colors.muted }]}> 
               {a.dueAt ? `${due.date} · ${due.time}` : 'No deadline set'}
             </Text>
           </View>
@@ -398,9 +409,30 @@ export default function CourseDetail() {
               </View>
             </View>
 
-            {syllabus.length ? <SyllabusView /> : null}
+            {syllabus.length ? (
+              <Pressable
+                onPress={() => setTab('syllabus')}
+                style={({ hovered, pressed }: any) => [
+                  s.syllabusPreview,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  hovered && s.cardHover,
+                  pressed && { transform: [{ scale: 0.995 }] },
+                ]}
+              >
+                <View style={[s.contentIcon, { backgroundColor: colors.accentSoft }]}>
+                  <ScrollText size={17} color={colors.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.itemTitle, { color: colors.text }]}>Course syllabus</Text>
+                  <Text style={[s.meta, { color: colors.muted }]}>{syllabus.length} organized section{syllabus.length === 1 ? '' : 's'} · open the clean syllabus view</Text>
+                </View>
+                <ArrowRight size={16} color={colors.accent} />
+              </Pressable>
+            ) : null}
           </>
         ) : null}
+
+        {tab === 'syllabus' ? (syllabus.length ? <SyllabusView /> : <Empty>No syllabus was provided by this Canvas course.</Empty>) : null}
 
         {tab === 'modules' ? (
           <>
@@ -522,7 +554,8 @@ const s = StyleSheet.create({
   summaryCard: { flexGrow: 1, flexBasis: 210, minWidth: 190, borderWidth: 1, borderRadius: 15, padding: 14 },
   summaryTitle: { fontSize: 12, fontWeight: '800', marginTop: 9 },
   summaryNumber: { fontSize: 24, fontWeight: '900', marginTop: 4 },
-  syllabus: { borderWidth: 1, borderRadius: 20, padding: 18, marginTop: 20 },
+  syllabusPreview: { minHeight: 64, borderWidth: 1, borderRadius: 15, padding: 13, marginTop: 18, flexDirection: 'row', alignItems: 'center', gap: 11 },
+  syllabus: { borderWidth: 1, borderRadius: 20, padding: 18 },
   syllabusHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16, marginBottom: 12 },
   syllabusStack: { gap: 8 },
   syllabusSection: { borderWidth: 1, borderRadius: 13, overflow: 'hidden' },
