@@ -6,3 +6,5 @@ web-build/
 .env.*
 !.env.example
 .DS_Store
+
+server/data/

@@ -1,0 +1,1 @@
+import { Inbox } from 'lucide-react-native'; import { FeatureScreen } from '@/components/FeatureScreen'; export default function InboxScreen(){return <FeatureScreen icon={Inbox} title="Inbox" description="Announcements, professor updates, grading notices, and important changes in one feed."/>}
