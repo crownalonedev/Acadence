@@ -24,6 +24,7 @@ export type SyncedCourse = {
   name: string;
   courseCode?: string;
   color?: string;
+  imageUrl?: string | null;
   startAt?: string | null;
   endAt?: string | null;
   termName?: string | null;
