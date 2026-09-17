@@ -9,10 +9,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import {
-  restrictToParentElement,
-  restrictToVerticalAxis,
-} from '@dnd-kit/modifiers';
+import { restrictToParentElement, restrictToVerticalAxis } from '@dnd-kit/modifiers';
 import {
   SortableContext,
   arrayMove,
@@ -20,13 +17,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import {
-  GripVertical,
-  Pause,
-  Play,
-  RotateCcw,
-  Sparkles,
-} from 'lucide-react-native';
+import { GripVertical, Pause, Play, RotateCcw, Sparkles } from 'lucide-react-native';
 import { navigationItems, NavigationItemId } from '@/constants/navigation';
 import { useNavigationPreferences } from '@/context/NavigationContext';
 import { useCanvasData } from '@/context/CanvasDataContext';
@@ -40,23 +31,11 @@ function formatFocusTime(totalSeconds: number) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-function SortableNavItem({
-  id,
-  active,
-  colors,
-}: {
-  id: NavigationItemId;
-  active: boolean;
-  colors: any;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id });
+function SortableNavItem({ id, active, colors }: { id: NavigationItemId; active: boolean; colors: any }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
   const item = navigationItems[id];
   const Icon = item.icon;
-  const t = transform
-    ? { x: 0, y: transform.y, scaleX: 1, scaleY: 1 }
-    : null;
-
+  const t = transform ? { x: 0, y: transform.y, scaleX: 1, scaleY: 1 } : null;
   return (
     <div
       ref={setNodeRef}
@@ -73,35 +52,16 @@ function SortableNavItem({
         style={[
           s.item,
           {
-            backgroundColor: isDragging
-              ? colors.accentSoft
-              : active
-                ? colors.accentSoft
-                : colors.background,
+            backgroundColor: isDragging ? colors.accentSoft : active ? colors.accentSoft : colors.background,
             borderColor: isDragging ? colors.accent : colors.border,
           },
         ]}
       >
-        <Icon
-          size={19}
-          color={active || isDragging ? colors.accent : colors.text}
-        />
-        <Text
-          style={[
-            s.label,
-            { color: active || isDragging ? colors.accent : colors.text },
-          ]}
-        >
-          {item.label}
-        </Text>
+        <Icon size={19} color={active || isDragging ? colors.accent : colors.text} />
+        <Text style={[s.label, { color: active || isDragging ? colors.accent : colors.text }]}>{item.label}</Text>
         <div
           {...listeners}
-          style={{
-            cursor: isDragging ? 'grabbing' : 'grab',
-            touchAction: 'none',
-            userSelect: 'none',
-            padding: 5,
-          }}
+          style={{ cursor: isDragging ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none', padding: 5 }}
         >
           <GripVertical size={18} color={colors.muted} />
         </div>
@@ -119,6 +79,7 @@ export function DesktopSidebar() {
   const [secretOpen, setSecretOpen] = useState(false);
   const [focusRunning, setFocusRunning] = useState(false);
   const [focusSeconds, setFocusSeconds] = useState(FOCUS_SECONDS);
+  const [brandHovered, setBrandHovered] = useState(false);
 
   const main = items.filter((id) => id !== 'profile');
   const profileItem = navigationItems.profile;
@@ -127,10 +88,10 @@ export function DesktopSidebar() {
   const studentName = profile?.name?.trim() || 'You';
   const brandGradient = focusRunning
     ? 'linear-gradient(135deg, #D8F2E3 0%, #A7D9BC 48%, #7AB493 100%)'
-    : 'linear-gradient(135deg, #F2FBF5 0%, #D8F0E1 44%, #A8D8BB 100%)';
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-  );
+    : brandHovered
+      ? 'linear-gradient(135deg, #F7FFF9 0%, #DDF4E6 38%, #9FD4B4 100%)'
+      : 'linear-gradient(135deg, #F2FBF5 0%, #D8F0E1 44%, #A8D8BB 100%)';
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   useEffect(() => {
     if (!focusRunning) return;
@@ -164,7 +125,6 @@ export function DesktopSidebar() {
     }
     setFocusRunning((running) => !running);
   };
-
   const resetFocus = () => {
     setFocusRunning(false);
     setFocusSeconds(FOCUS_SECONDS);
@@ -173,58 +133,44 @@ export function DesktopSidebar() {
   const renderNormal = main.map((id) => {
     const item = navigationItems[id];
     const Icon = item.icon;
-    const active =
-      id === 'home'
-        ? path === '/' || path.endsWith('/(tabs)')
-        : path.includes(item.route);
-
+    const active = id === 'home' ? path === '/' || path.endsWith('/(tabs)') : path.includes(item.route);
     return (
       <Pressable
         key={id}
-        onPress={() =>
-          router.push(
-            item.route === 'index'
-              ? '/(tabs)'
-              : (`/(tabs)/${item.route}` as any),
-          )
-        }
-        style={[
+        onPress={() => router.push(item.route === 'index' ? '/(tabs)' : (`/(tabs)/${item.route}` as any))}
+        style={({ hovered, pressed }: any) => [
           s.item,
           {
             backgroundColor: active ? colors.accentSoft : colors.background,
             borderColor: active ? colors.accentSoft : colors.border,
           },
+          hovered && !active && { transform: [{ translateX: 2 }] },
+          pressed && { opacity: 0.78 },
         ]}
       >
         <Icon size={19} color={active ? colors.accent : colors.text} />
-        <Text
-          style={[s.label, { color: active ? colors.accent : colors.text }]}
-        >
-          {item.label}
-        </Text>
+        <Text style={[s.label, { color: active ? colors.accent : colors.text }]}>{item.label}</Text>
       </Pressable>
     );
   });
 
   return (
-    <View
-      style={[
-        s.sidebar,
-        { backgroundColor: colors.surface, borderColor: colors.border },
-      ]}
-    >
+    <View style={[s.sidebar, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Acadence"
           accessibilityHint="Open a hidden study focus tool"
+          onHoverIn={() => setBrandHovered(true)}
+          onHoverOut={() => setBrandHovered(false)}
           onPress={() => setSecretOpen((open) => !open)}
           style={({ pressed }) => [
             s.brandDepth,
+            brandHovered && !pressed && s.brandDepthHover,
             pressed && s.brandDepthPressed,
           ]}
         >
-          <View style={s.brandPill}>
+          <View style={[s.brandPill, brandHovered && s.brandPillHover]}>
             <div
               aria-hidden="true"
               style={{
@@ -232,6 +178,7 @@ export function DesktopSidebar() {
                 inset: 0,
                 borderRadius: 999,
                 background: brandGradient,
+                transition: 'background 180ms ease',
               }}
             />
             <View pointerEvents="none" style={s.brandHighlight} />
@@ -241,6 +188,7 @@ export function DesktopSidebar() {
                 s.secretDot,
                 {
                   backgroundColor: focusRunning ? '#173F31' : '#2F6B4F',
+                  transform: [{ scale: brandHovered ? 1.18 : 1 }],
                 },
               ]}
             />
@@ -259,36 +207,25 @@ export function DesktopSidebar() {
             ]}
           >
             <View style={s.secretTitleRow}>
-              <View style={s.secretSparkle}>
-                <Sparkles size={13} color="#2F6B4F" />
-              </View>
+              <View style={s.secretSparkle}><Sparkles size={13} color="#2F6B4F" /></View>
               <Text style={[s.secretTitle, { color: colors.text }]}>Secret study sprint</Text>
             </View>
-
             <Text style={[s.secretCopy, { color: colors.muted }]}> 
               {focusSeconds === 0
                 ? 'Nice. Ten focused minutes, done.'
                 : 'Pick one thing and give it ten distraction-free minutes.'}
             </Text>
-
-            <View
-              style={[
-                s.timerChip,
-                {
-                  backgroundColor: isDark ? '#284735' : '#DCEFE3',
-                },
-              ]}
-            >
+            <View style={[s.timerChip, { backgroundColor: isDark ? '#284735' : '#DCEFE3' }]}> 
               <Text style={s.timerText}>{formatFocusTime(focusSeconds)}</Text>
             </View>
-
             <View style={s.secretActions}>
               <Pressable
                 accessibilityRole="button"
                 onPress={toggleFocus}
-                style={({ pressed }) => [
+                style={({ hovered, pressed }: any) => [
                   s.focusButton,
-                  pressed && { transform: [{ translateY: 1 }] },
+                  hovered && { transform: [{ translateY: -1 }] },
+                  pressed && { transform: [{ translateY: 1 }, { scale: 0.98 }] },
                 ]}
               >
                 {focusRunning ? (
@@ -296,19 +233,13 @@ export function DesktopSidebar() {
                 ) : (
                   <Play size={13} color="#F4FBF6" fill="#F4FBF6" />
                 )}
-                <Text style={s.focusButtonText}>
-                  {focusRunning ? 'Pause' : focusSeconds === 0 ? 'Again' : 'Start'}
-                </Text>
+                <Text style={s.focusButtonText}>{focusRunning ? 'Pause' : focusSeconds === 0 ? 'Again' : 'Start'}</Text>
               </Pressable>
-
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Reset focus timer"
                 onPress={resetFocus}
-                style={[
-                  s.resetButton,
-                  { borderColor: isDark ? '#40604E' : '#BCD5C5' },
-                ]}
+                style={[s.resetButton, { borderColor: isDark ? '#40604E' : '#BCD5C5' }]}
               >
                 <RotateCcw size={13} color={colors.muted} />
               </Pressable>
@@ -325,20 +256,13 @@ export function DesktopSidebar() {
             modifiers={[restrictToVerticalAxis, restrictToParentElement]}
             onDragEnd={end}
           >
-            <SortableContext
-              items={main}
-              strategy={verticalListSortingStrategy}
-            >
+            <SortableContext items={main} strategy={verticalListSortingStrategy}>
               <View style={{ gap: 5 }}>
                 {main.map((id) => (
                   <SortableNavItem
                     key={id}
                     id={id}
-                    active={
-                      id === 'home'
-                        ? path === '/' || path.endsWith('/(tabs)')
-                        : path.includes(navigationItems[id].route)
-                    }
+                    active={id === 'home' ? path === '/' || path.endsWith('/(tabs)') : path.includes(navigationItems[id].route)}
                     colors={colors}
                   />
                 ))}
@@ -351,12 +275,12 @@ export function DesktopSidebar() {
       </View>
 
       <View style={{ flex: 1 }} />
-
       <Pressable
         onPress={() => router.push('/(tabs)/ai')}
-        style={[
+        style={({ hovered }: any) => [
           s.ai,
           { borderColor: colors.border, backgroundColor: colors.background },
+          hovered && { transform: [{ translateY: -1 }] },
         ]}
       >
         <Sparkles size={17} color={colors.accent} />
@@ -365,45 +289,25 @@ export function DesktopSidebar() {
           <Text style={[s.aiSub, { color: colors.muted }]}>Your academic assistant</Text>
         </View>
       </Pressable>
-
       <Pressable
         onPress={() => router.push('/(tabs)/settings')}
         style={[
           s.item,
           {
-            backgroundColor: profileActive
-              ? colors.accentSoft
-              : colors.background,
+            backgroundColor: profileActive ? colors.accentSoft : colors.background,
             borderColor: colors.border,
           },
         ]}
       >
-        <ProfileIcon
-          size={19}
-          color={profileActive ? colors.accent : colors.text}
-        />
-        <Text
-          numberOfLines={1}
-          style={[
-            s.label,
-            { color: profileActive ? colors.accent : colors.text },
-          ]}
-        >
-          {studentName}
-        </Text>
+        <ProfileIcon size={19} color={profileActive ? colors.accent : colors.text} />
+        <Text numberOfLines={1} style={[s.label, { color: profileActive ? colors.accent : colors.text }]}>{studentName}</Text>
       </Pressable>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  sidebar: {
-    width: 244,
-    minHeight: '100%',
-    borderRightWidth: 1,
-    padding: 24,
-    paddingTop: 30,
-  },
+  sidebar: { width: 244, minHeight: '100%', borderRightWidth: 1, padding: 24, paddingTop: 30 },
   brandDepth: {
     alignSelf: 'flex-start',
     backgroundColor: '#2F6B4F',
@@ -415,10 +319,14 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 7 },
     elevation: 5,
   },
-  brandDepthPressed: {
-    paddingBottom: 2,
-    transform: [{ translateY: 3 }],
+  brandDepthHover: {
+    paddingBottom: 7,
+    transform: [{ translateY: -2 }, { scale: 1.025 }],
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 9 },
   },
+  brandDepthPressed: { paddingBottom: 2, transform: [{ translateY: 3 }, { scale: 0.99 }] },
   brandPill: {
     position: 'relative',
     overflow: 'hidden',
@@ -432,6 +340,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  brandPillHover: { borderColor: '#FFFFFF' },
   brandHighlight: {
     position: 'absolute',
     zIndex: 2,
@@ -442,21 +351,8 @@ const s = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: 'rgba(255,255,255,.76)',
   },
-  brand: {
-    zIndex: 1,
-    color: '#163F30',
-    fontSize: 22,
-    fontWeight: '900',
-    letterSpacing: -0.7,
-  },
-  secretDot: {
-    zIndex: 1,
-    width: 8,
-    height: 8,
-    borderRadius: 999,
-    borderWidth: 1.5,
-    borderColor: '#F4FBF6',
-  },
+  brand: { zIndex: 1, color: '#163F30', fontSize: 22, fontWeight: '900', letterSpacing: -0.7 },
+  secretDot: { zIndex: 1, width: 8, height: 8, borderRadius: 999, borderWidth: 1.5, borderColor: '#F4FBF6' },
   semester: { fontSize: 12, marginTop: 9 },
   secretCard: {
     marginTop: 12,
@@ -469,78 +365,20 @@ const s = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 },
     elevation: 2,
   },
-  secretTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  secretSparkle: {
-    width: 25,
-    height: 25,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#D6EEDF',
-  },
+  secretTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  secretSparkle: { width: 25, height: 25, borderRadius: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: '#D6EEDF' },
   secretTitle: { fontSize: 12, fontWeight: '900' },
   secretCopy: { fontSize: 10, lineHeight: 15, marginTop: 8 },
-  timerChip: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginTop: 10,
-  },
-  timerText: {
-    color: '#1F5A44',
-    fontSize: 18,
-    fontWeight: '900',
-    letterSpacing: -0.4,
-    fontVariant: ['tabular-nums'],
-  },
-  secretActions: {
-    flexDirection: 'row',
-    gap: 7,
-    marginTop: 10,
-  },
-  focusButton: {
-    minHeight: 32,
-    borderRadius: 10,
-    backgroundColor: '#1F5A44',
-    paddingHorizontal: 11,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
+  timerChip: { alignSelf: 'flex-start', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6, marginTop: 10 },
+  timerText: { color: '#1F5A44', fontSize: 18, fontWeight: '900', letterSpacing: -0.4, fontVariant: ['tabular-nums'] },
+  secretActions: { flexDirection: 'row', gap: 7, marginTop: 10 },
+  focusButton: { minHeight: 32, borderRadius: 10, backgroundColor: '#1F5A44', paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   focusButtonText: { color: '#F4FBF6', fontSize: 11, fontWeight: '900' },
-  resetButton: {
-    width: 34,
-    height: 32,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  resetButton: { width: 34, height: 32, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   nav: { gap: 5, marginTop: 30 },
-  item: {
-    minHeight: 44,
-    borderRadius: 11,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-  },
+  item: { minHeight: 44, borderRadius: 11, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, borderWidth: 1 },
   label: { fontSize: 14, fontWeight: '700', flex: 1 },
-  ai: {
-    flexDirection: 'row',
-    gap: 10,
-    borderWidth: 1,
-    borderRadius: 13,
-    padding: 12,
-    marginBottom: 8,
-  },
+  ai: { flexDirection: 'row', gap: 10, borderWidth: 1, borderRadius: 13, padding: 12, marginBottom: 8 },
   aiTitle: { fontSize: 13, fontWeight: '800' },
   aiSub: { fontSize: 10, marginTop: 2 },
 });
