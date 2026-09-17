@@ -19,6 +19,9 @@ export type SyncedCourse = {
   name: string;
   courseCode?: string;
   color?: string;
+  startAt?: string | null;
+  endAt?: string | null;
+  syllabusBody?: string;
   applyAssignmentGroupWeights?: boolean;
   currentScore?: number | null;
   currentGrade?: string | null;
@@ -73,6 +76,47 @@ export type SyncedAssignmentGroup = {
   rules?: any;
   position?: number;
 };
+export type SyncedModuleItem = {
+  id: string;
+  moduleId: string;
+  title: string;
+  type?: string;
+  position?: number;
+  indent?: number;
+  contentId?: string;
+  pageUrl?: string;
+  htmlUrl?: string;
+  completionRequirement?: any;
+};
+export type SyncedModule = {
+  id: string;
+  courseId: string;
+  name: string;
+  position?: number;
+  state?: string;
+  unlockAt?: string | null;
+  prerequisiteModuleIds?: string[];
+  items?: SyncedModuleItem[];
+};
+export type SyncedFile = {
+  id: string;
+  courseId: string;
+  displayName: string;
+  filename?: string;
+  contentType?: string;
+  size?: number;
+  updatedAt?: string;
+  htmlUrl?: string;
+};
+export type SyncedPage = {
+  id: string;
+  courseId: string;
+  title: string;
+  url?: string;
+  updatedAt?: string;
+  frontPage?: boolean;
+  htmlUrl?: string;
+};
 type CanvasData = {
   connected: boolean;
   canvasOrigin?: string;
@@ -87,6 +131,12 @@ type CanvasData = {
   grades: SyncedGrade[];
   allAssignmentGroups: SyncedAssignmentGroup[];
   assignmentGroups: SyncedAssignmentGroup[];
+  allModules: SyncedModule[];
+  modules: SyncedModule[];
+  allFiles: SyncedFile[];
+  files: SyncedFile[];
+  allPages: SyncedPage[];
+  pages: SyncedPage[];
   selectedCourseIds: string[];
   setSelectedCourseIds: (ids: string[]) => void;
   syncedAt?: string;
@@ -103,6 +153,9 @@ const empty = () => ({
   announcements: [],
   grades: [],
   assignmentGroups: [],
+  modules: [],
+  files: [],
+  pages: [],
   notificationFeed: null,
 });
 const loadSelection = (): string[] => {
@@ -158,6 +211,9 @@ export function CanvasDataProvider({ children }: PropsWithChildren) {
         announcements: data.announcements || [],
         grades: data.grades || [],
         assignmentGroups: data.assignmentGroups || [],
+        modules: data.modules || [],
+        files: data.files || [],
+        pages: data.pages || [],
         syncedAt: data.receivedAt,
         notificationFeed: data.notificationFeed || null,
       });
@@ -193,7 +249,10 @@ export function CanvasDataProvider({ children }: PropsWithChildren) {
       allAssignments: SyncedAssignment[] = raw.assignments,
       allAnnouncements: SyncedAnnouncement[] = raw.announcements,
       allGrades: SyncedGrade[] = raw.grades,
-      allAssignmentGroups: SyncedAssignmentGroup[] = raw.assignmentGroups;
+      allAssignmentGroups: SyncedAssignmentGroup[] = raw.assignmentGroups,
+      allModules: SyncedModule[] = raw.modules,
+      allFiles: SyncedFile[] = raw.files,
+      allPages: SyncedPage[] = raw.pages;
     const valid = selectedCourseIds.filter((id) =>
       allCourses.some((c) => String(c.id) === id),
     );
@@ -216,6 +275,12 @@ export function CanvasDataProvider({ children }: PropsWithChildren) {
       grades: allGrades.filter(active),
       allAssignmentGroups,
       assignmentGroups: allAssignmentGroups.filter(active),
+      allModules,
+      modules: allModules.filter(active),
+      allFiles,
+      files: allFiles.filter(active),
+      allPages,
+      pages: allPages.filter(active),
       selectedCourseIds: valid,
       setSelectedCourseIds,
       syncedAt: raw.syncedAt,
