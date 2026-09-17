@@ -46,6 +46,31 @@ async function collectCanvasData() {
       })
       .filter((entry) => entry.name && Number.isFinite(entry.value))
       .sort((a, b) => b.value - a.value);
+  const extractSyllabusWeights = (html) => {
+    const text = String(html || "")
+      .replace(/<(script|style)\b[^>]*>[\s\S]*?<\/\1>/gi, " ")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|div|li|tr|h[1-6])>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/\s+/g, " ")
+      .trim();
+    const matches = [];
+    const pattern = /([A-Za-z][A-Za-z0-9 &/()'’.-]{1,50}?)\s*(?:[:\-–—]|\s)\s*(\d{1,3}(?:\.\d+)?)\s*%/g;
+    let match;
+    while ((match = pattern.exec(text))) {
+      const name = match[1].replace(/^and\s+/i, "").trim(),
+        weight = Number(match[2]);
+      if (!name || !Number.isFinite(weight) || weight <= 0 || weight > 100)
+        continue;
+      if (/^(a[+-]?|b[+-]?|c[+-]?|d[+-]?|f|score|grade)$/i.test(name)) continue;
+      const key = name.toLowerCase();
+      if (!matches.some((item) => item.name.toLowerCase() === key))
+        matches.push({ name, weight });
+    }
+    return matches.slice(0, 20);
+  };
 
   const profile = await (await request("/api/v1/users/self/profile")).json();
   const courses = await list(
@@ -105,7 +130,6 @@ async function collectCanvasData() {
     }
 
     try {
-      // Fetch assignments separately: nested group assignments can be truncated.
       const rows = await list(
         `/api/v1/courses/${course.id}/assignments?include[]=submission&per_page=100`,
       );
@@ -160,8 +184,6 @@ async function collectCanvasData() {
     }
 
     try {
-      // Canvas defaults this endpoint to a short date window. Request the whole
-      // course history so Acadence can show older announcements on first sync.
       const startDate = historyStart(course.start_at);
       const rows = await list(
         `/api/v1/announcements?context_codes[]=course_${course.id}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(syncedAt)}&per_page=100`,
@@ -267,6 +289,7 @@ async function collectCanvasData() {
         startAt: c.start_at,
         endAt: c.end_at,
         syllabusBody: c.syllabus_body || "",
+        syllabusWeights: extractSyllabusWeights(c.syllabus_body),
         applyAssignmentGroupWeights: !!c.apply_assignment_group_weights,
         gradingStandardId:
           c.grading_standard_id == null ? undefined : String(c.grading_standard_id),
