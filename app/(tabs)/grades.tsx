@@ -36,6 +36,44 @@ type SimRow = {
   grade?: SyncedGrade;
   score: number | null;
 };
+type WeightSource = 'canvas' | 'syllabus' | 'points';
+type ResolvedWeights = { groups: SyncedAssignmentGroup[]; source: WeightSource };
+
+function normalizeName(value?: string) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+function resolveWeights(
+  course: SyncedCourse,
+  groups: SyncedAssignmentGroup[],
+): ResolvedWeights {
+  if (groups.some((group) => group.weight > 0)) return { groups, source: 'canvas' };
+  const hints = course.syllabusWeights || [];
+  if (!hints.length || !groups.length) return { groups, source: 'points' };
+
+  const matched = groups.map((group) => {
+    const groupName = normalizeName(group.name);
+    const hint = hints.find((candidate) => {
+      const hintName = normalizeName(candidate.name);
+      return (
+        groupName.length >= 4 &&
+        hintName.length >= 4 &&
+        (groupName === hintName || groupName.includes(hintName) || hintName.includes(groupName))
+      );
+    });
+    return { ...group, weight: hint?.weight || 0 };
+  });
+  const used = matched.filter((group) => group.weight > 0);
+  const total = used.reduce((sum, group) => sum + group.weight, 0);
+  // Only trust a syllabus fallback when it clearly describes a complete grading mix.
+  if (used.length && Math.abs(total - 100) <= 5)
+    return { groups: matched, source: 'syllabus' };
+  return { groups, source: 'points' };
+}
 
 function letterFor(course: SyncedCourse, score: number | null) {
   if (score == null) return null;
@@ -71,9 +109,9 @@ function applyDropRules(rows: SimRow[], group?: SyncedAssignmentGroup) {
   const low = Math.max(0, Number(rules.drop_lowest) || 0);
   const high = Math.max(0, Number(rules.drop_highest) || 0);
   candidates.slice(0, low).forEach((row) => dropped.add(String(row.assignment.id)));
-  candidates
-    .filter((row) => !dropped.has(String(row.assignment.id)))
-    .slice(Math.max(0, candidates.length - high))
+  const remaining = candidates.filter((row) => !dropped.has(String(row.assignment.id)));
+  remaining
+    .slice(Math.max(0, remaining.length - high))
     .forEach((row) => dropped.add(String(row.assignment.id)));
   return valid.filter((row) => !dropped.has(String(row.assignment.id)));
 }
@@ -81,14 +119,14 @@ function applyDropRules(rows: SimRow[], group?: SyncedAssignmentGroup) {
 function scoreRows(
   course: SyncedCourse,
   rows: SimRow[],
-  groups: SyncedAssignmentGroup[],
+  rawGroups: SyncedAssignmentGroup[],
 ) {
-  const weighted =
-    !!course.applyAssignmentGroupWeights && groups.some((group) => group.weight > 0);
+  const resolved = resolveWeights(course, rawGroups);
+  const weighted = resolved.source !== 'points' && resolved.groups.some((group) => group.weight > 0);
   if (weighted) {
     let total = 0;
     let used = 0;
-    for (const group of groups) {
+    for (const group of resolved.groups) {
       if (group.weight <= 0) continue;
       const kept = applyDropRules(
         rows.filter(
@@ -109,9 +147,27 @@ function scoreRows(
     return used ? round((total / used) * 100) : null;
   }
 
-  const kept = applyDropRules(rows);
-  const earned = kept.reduce((sum, row) => sum + Number(row.score || 0), 0);
-  const possible = kept.reduce(
+  // For points-based courses, still respect drop rules inside each Canvas group.
+  const grouped = new Map<string, SimRow[]>();
+  const ungrouped: SimRow[] = [];
+  for (const row of rows) {
+    const id = row.assignment.assignmentGroupId;
+    if (!id) ungrouped.push(row);
+    else grouped.set(String(id), [...(grouped.get(String(id)) || []), row]);
+  }
+  const kept = [...ungrouped.filter((row) => row.score != null)];
+  for (const [id, groupRows] of grouped) {
+    const group = rawGroups.find((item) => String(item.id) === id);
+    kept.push(...applyDropRules(groupRows, group));
+  }
+  const scored = kept.filter(
+    (row) =>
+      row.score != null &&
+      Number(row.assignment.pointsPossible || 0) > 0 &&
+      !row.assignment.omitFromFinalGrade,
+  );
+  const earned = scored.reduce((sum, row) => sum + Number(row.score || 0), 0);
+  const possible = scored.reduce(
     (sum, row) => sum + Number(row.assignment.pointsPossible || 0),
     0,
   );
@@ -159,6 +215,10 @@ export default function Grades() {
         : [],
     [assignmentGroups, course],
   );
+  const resolvedWeights = useMemo(
+    () => (course ? resolveWeights(course, selectedGroups) : { groups: [], source: 'points' as WeightSource }),
+    [course, selectedGroups],
+  );
 
   const simRows = useMemo<SimRow[]>(() => {
     if (!course) return [];
@@ -186,7 +246,7 @@ export default function Grades() {
 
   const groupStats = useMemo(() => {
     if (!course) return [];
-    return selectedGroups.map((group) => {
+    return resolvedWeights.groups.map((group) => {
       const groupRows = simRows.filter(
         (row) => String(row.assignment.assignmentGroupId) === String(group.id),
       );
@@ -202,7 +262,7 @@ export default function Grades() {
         itemCount: groupRows.length,
       };
     });
-  }, [course, selectedGroups, simRows]);
+  }, [course, resolvedWeights, simRows]);
 
   return (
     <Screen>
@@ -210,7 +270,7 @@ export default function Grades() {
         <Text style={[s.title, { color: colors.text }]}>Grades</Text>
         <Text style={[s.sub, { color: colors.muted }]}> 
           {connected
-            ? 'Canvas grades, assignment weights, and private What-If projections.'
+            ? 'Canvas grades, grading weights, letter grades, and private What-If projections.'
             : 'Connect Canvas to see your grades.'}
         </Text>
       </View>
@@ -222,8 +282,7 @@ export default function Grades() {
           );
           const courseAssignments = assignments.filter(
             (assignment) =>
-              String(assignment.courseId) === String(c.id) &&
-              !assignment.omitFromFinalGrade,
+              String(assignment.courseId) === String(c.id) && !assignment.omitFromFinalGrade,
           );
           const gradeByAssignment = new Map(
             rows.map((grade) => [String(grade.assignmentId), grade]),
@@ -233,13 +292,13 @@ export default function Grades() {
             grade: gradeByAssignment.get(String(assignment.id)),
             score: gradeByAssignment.get(String(assignment.id))?.score ?? null,
           }));
-          const groups = assignmentGroups.filter(
+          const rawGroups = assignmentGroups.filter(
             (group) => String(group.courseId) === String(c.id),
           );
-          const fallback = scoreRows(c, currentRows, groups);
+          const resolved = resolveWeights(c, rawGroups);
+          const fallback = scoreRows(c, currentRows, rawGroups);
           const score = c.currentScore ?? fallback;
           const letter = c.currentGrade || letterFor(c, score);
-          const weighted = !!c.applyAssignmentGroupWeights && groups.some((g) => g.weight > 0);
           return (
             <Animated.View
               key={String(c.id)}
@@ -274,7 +333,11 @@ export default function Grades() {
               <View style={s.cardBottom}>
                 <View>
                   <Text style={[s.metaStrong, { color: colors.text }]}> 
-                    {weighted ? `${groups.filter((g) => g.weight > 0).length} weighted groups` : 'Points-based grading'}
+                    {resolved.source === 'canvas'
+                      ? `${resolved.groups.filter((g) => g.weight > 0).length} Canvas-weighted groups`
+                      : resolved.source === 'syllabus'
+                        ? 'Weights matched from syllabus'
+                        : 'Points-based grading'}
                   </Text>
                   <Text style={[s.meta, { color: colors.muted }]}> 
                     {rows.length} graded item{rows.length === 1 ? '' : 's'}
@@ -334,12 +397,7 @@ export default function Grades() {
         );
       })}
 
-      <Modal
-        transparent
-        visible={!!course}
-        animationType="fade"
-        onRequestClose={() => setCourse(null)}
-      >
+      <Modal transparent visible={!!course} animationType="fade" onRequestClose={() => setCourse(null)}>
         <View style={s.backdrop}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setCourse(null)} />
           <Animated.View
@@ -405,12 +463,16 @@ export default function Grades() {
             <View style={s.infoRow}>
               <Sparkles size={14} color={colors.accent} />
               <Text style={[s.hint, { color: colors.muted }]}> 
-                {course?.applyAssignmentGroupWeights
-                  ? 'Using Canvas assignment-group weights and drop rules where available.'
-                  : 'Using points earned ÷ points possible for this course.'}
+                {resolvedWeights.source === 'canvas'
+                  ? 'Using Canvas assignment-group weights and drop rules.'
+                  : resolvedWeights.source === 'syllabus'
+                    ? 'Canvas group weights were unavailable, so matching syllabus percentages are being used as a fallback.'
+                    : 'No reliable weighting mix was available, so this course uses points earned ÷ points possible.'}
                 {course?.gradingScheme?.length
                   ? ' Letter grades use the Canvas grading scheme.'
-                  : ''}
+                  : course?.currentGrade
+                    ? ' Canvas provides your current letter grade; a projected letter needs an accessible grading scheme.'
+                    : ''}
               </Text>
             </View>
 
@@ -431,10 +493,7 @@ export default function Grades() {
                         <View
                           style={[
                             s.fill,
-                            {
-                              backgroundColor: colors.accent,
-                              width: `${clamp(group.percent || 0)}%`,
-                            },
+                            { backgroundColor: colors.accent, width: `${clamp(group.percent || 0)}%` },
                           ]}
                         />
                       </View>
@@ -451,7 +510,7 @@ export default function Grades() {
                 const grade = selectedGrades.find(
                   (item) => String(item.assignmentId) === String(assignment.id),
                 );
-                const group = selectedGroups.find(
+                const group = resolvedWeights.groups.find(
                   (item) => String(item.id) === String(assignment.assignmentGroupId),
                 );
                 return (
@@ -514,14 +573,7 @@ const s = StyleSheet.create({
   title: { fontSize: 30, fontWeight: '800' },
   sub: { fontSize: 14, marginTop: 5, marginBottom: 24 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  courseCard: {
-    minWidth: 270,
-    flexGrow: 1,
-    flexBasis: 310,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: 16,
-  },
+  courseCard: { minWidth: 270, flexGrow: 1, flexBasis: 310, borderWidth: 1, borderRadius: radius.md, padding: 16 },
   courseHead: { flexDirection: 'row', alignItems: 'center', gap: 11 },
   icon: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   code: { fontSize: 10, fontWeight: '800' },
