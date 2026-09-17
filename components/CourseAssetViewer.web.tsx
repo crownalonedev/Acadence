@@ -50,6 +50,16 @@ const family = (item: CourseViewerItem) => {
   return 'frame';
 };
 
+const isWebUrl = (value?: string) => {
+  if (!value) return false;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
 export function CourseAssetViewer({ item, onClose }: { item: CourseViewerItem; onClose: () => void }) {
   const { colors } = useAppTheme();
   const type = family(item);
@@ -61,12 +71,17 @@ export function CourseAssetViewer({ item, onClose }: { item: CourseViewerItem; o
   // browser-usable file URL. Prefer it over the local proxy when it exists; the
   // proxy remains the fallback for schools that only return a signed download URL.
   const rawUrl = item.publicUrl || proxied || item.url;
+
+  // Office's web renderer needs a URL it can reach itself. For synced Canvas files
+  // use Canvas's public/signed URL; for a normal external .pptx/.docx/.xlsx link,
+  // the original external URL can be rendered directly inside Acadence.
+  const officeSource = item.publicUrl || item.url;
   const officeUrl = useMemo(
     () =>
-      item.publicUrl
-        ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(item.publicUrl)}`
+      isWebUrl(officeSource)
+        ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(officeSource!)}`
         : undefined,
-    [item.publicUrl],
+    [officeSource],
   );
   const displayUrl = type === 'office' ? officeUrl : rawUrl;
   const canvasOnly = !item.html && !displayUrl && !!item.canvasUrl;
@@ -79,7 +94,9 @@ export function CourseAssetViewer({ item, onClose }: { item: CourseViewerItem; o
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text numberOfLines={1} style={[s.title, { color: colors.text }]}>{item.title}</Text>
-          <Text style={[s.sub, { color: colors.muted }]}>Acadence viewer</Text>
+          <Text style={[s.sub, { color: colors.muted }]}>
+            {type === 'office' && ['ppt', 'pptx'].includes(extension(item)) ? 'PowerPoint · Acadence viewer' : 'Acadence viewer'}
+          </Text>
         </View>
         {rawUrl ? (
           <Pressable
@@ -91,10 +108,10 @@ export function CourseAssetViewer({ item, onClose }: { item: CourseViewerItem; o
             ]}
           >
             <ArrowUpRight size={14} color={colors.accent} />
-            <Text style={[s.actionText, { color: colors.accent }]}>Open file</Text>
+            <Text style={[s.actionText, { color: colors.accent }]}>Open externally</Text>
           </Pressable>
         ) : null}
-        {item.canvasUrl ? (
+        {item.canvasUrl && item.canvasUrl !== rawUrl ? (
           <Pressable
             onPress={() => window.open(item.canvasUrl, '_blank', 'noopener,noreferrer')}
             style={({ hovered }: any) => [
@@ -153,7 +170,7 @@ export function CourseAssetViewer({ item, onClose }: { item: CourseViewerItem; o
           />
         )}
       </View>
-      <Text style={[s.note, { color: colors.muted }]}>PDFs, images, audio and video use Canvas’s temporary signed file URL when available. Office documents use the signed URL with an embedded Office renderer. If a signed URL expires, reload the extension and sync Canvas again.</Text>
+      <Text style={[s.note, { color: colors.muted }]}>Links open in Acadence first. PDFs, images, audio and video render directly; PowerPoint, Word and Excel links use the built-in Office reader when the source URL is reachable. “Open externally” remains available as a fallback for sites that block embedding.</Text>
     </View>
   );
 }
