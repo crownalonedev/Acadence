@@ -73,12 +73,22 @@ async function collectCanvasData() {
   };
   const enrollmentFor = (course) =>
     Array.isArray(course?.enrollments) ? course.enrollments[0] || null : null;
+  const courseImageUrl = (course) => {
+    const value = course?.image_download_url || course?.image_url;
+    if (!value) return null;
+    try {
+      return new URL(value, location.origin).href;
+    } catch {
+      return null;
+    }
+  };
   const courseGradeSummary = (course, enrollmentState) => {
     const e = enrollmentFor(course);
     return {
       id: String(course.id),
       name: course.name,
       courseCode: course.course_code,
+      imageUrl: courseImageUrl(course),
       startAt: course.start_at,
       endAt: course.end_at,
       termName: course.term?.name || null,
@@ -94,13 +104,13 @@ async function collectCanvasData() {
 
   const profile = await (await request("/api/v1/users/self/profile")).json();
   const courses = await list(
-    "/api/v1/courses?enrollment_state=active&include[]=total_scores&include[]=current_grading_period_scores&include[]=syllabus_body&include[]=term&per_page=100",
+    "/api/v1/courses?enrollment_state=active&include[]=total_scores&include[]=current_grading_period_scores&include[]=syllabus_body&include[]=term&include[]=course_image&per_page=100",
   );
   let historicalCourseRows = [],
     historicalCoursesComplete = false;
   try {
     historicalCourseRows = await list(
-      "/api/v1/courses?enrollment_state=completed&include[]=total_scores&include[]=term&per_page=100",
+      "/api/v1/courses?enrollment_state=completed&include[]=total_scores&include[]=term&include[]=course_image&per_page=100",
     );
     historicalCoursesComplete = true;
   } catch {
