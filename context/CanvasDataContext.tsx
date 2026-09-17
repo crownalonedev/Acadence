@@ -26,6 +26,8 @@ export type SyncedCourse = {
   color?: string;
   startAt?: string | null;
   endAt?: string | null;
+  termName?: string | null;
+  enrollmentState?: "active" | "completed" | string;
   syllabusBody?: string;
   syllabusWeights?: SyncedWeightHint[];
   applyAssignmentGroupWeights?: boolean;
@@ -149,6 +151,7 @@ type CanvasData = {
   profile?: any;
   allCourses: SyncedCourse[];
   courses: SyncedCourse[];
+  historicalCourses: SyncedCourse[];
   allAssignments: SyncedAssignment[];
   assignments: SyncedAssignment[];
   allAnnouncements: SyncedAnnouncement[];
@@ -176,6 +179,7 @@ const C = createContext<CanvasData | null>(null);
 const empty = () => ({
   connected: false,
   courses: [],
+  historicalCourses: [],
   assignments: [],
   announcements: [],
   grades: [],
@@ -234,6 +238,7 @@ export function CanvasDataProvider({ children }: PropsWithChildren) {
         canvasOrigin: data.canvasOrigin,
         profile: data.profile,
         courses: data.courses || [],
+        historicalCourses: data.historicalCourses || [],
         assignments: data.assignments || [],
         announcements: data.announcements || [],
         grades: data.grades || [],
@@ -271,6 +276,7 @@ export function CanvasDataProvider({ children }: PropsWithChildren) {
 
   const value = useMemo(() => {
     const allCourses: SyncedCourse[] = raw.courses,
+      historicalCourses: SyncedCourse[] = raw.historicalCourses || [],
       allAssignments: SyncedAssignment[] = raw.assignments,
       allAnnouncements: SyncedAnnouncement[] = raw.announcements,
       allGrades: SyncedGrade[] = raw.grades,
@@ -292,6 +298,7 @@ export function CanvasDataProvider({ children }: PropsWithChildren) {
       profile: raw.profile,
       allCourses,
       courses: allCourses.filter((c) => activeIds.has(String(c.id))),
+      historicalCourses,
       allAssignments,
       assignments: allAssignments.filter(active),
       allAnnouncements,
