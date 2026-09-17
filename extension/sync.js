@@ -35,6 +35,18 @@ async function collectCanvasData() {
       ? new Date(parsed).toISOString()
       : "1970-01-01T00:00:00.000Z";
   };
+  const normalizeScheme = (scheme) =>
+    (Array.isArray(scheme) ? scheme : [])
+      .map((entry) => {
+        const raw = Number(entry?.value);
+        return {
+          name: String(entry?.name || "").trim(),
+          value: Number.isFinite(raw) ? (raw <= 1.5 ? raw * 100 : raw) : NaN,
+        };
+      })
+      .filter((entry) => entry.name && Number.isFinite(entry.value))
+      .sort((a, b) => b.value - a.value);
+
   const profile = await (await request("/api/v1/users/self/profile")).json();
   const courses = await list(
     "/api/v1/courses?enrollment_state=active&include[]=total_scores&include[]=current_grading_period_scores&include[]=syllabus_body&per_page=100",
@@ -45,7 +57,8 @@ async function collectCanvasData() {
     assignmentGroups = [],
     modules = [],
     files = [],
-    pages = [];
+    pages = [],
+    gradingSchemes = new Map();
   const completeCourseIds = {
     assignments: [],
     announcements: [],
@@ -55,8 +68,23 @@ async function collectCanvasData() {
     files: [],
     pages: [],
   };
+
   for (const course of courses) {
     const courseId = String(course.id);
+
+    if (course.grading_standard_id != null) {
+      try {
+        const standard = await (
+          await request(
+            `/api/v1/courses/${course.id}/grading_standards/${course.grading_standard_id}`,
+          )
+        ).json();
+        gradingSchemes.set(courseId, normalizeScheme(standard?.grading_scheme));
+      } catch {
+        /* Some institutions hide grading-standard details from students. */
+      }
+    }
+
     try {
       const groups = await list(
         `/api/v1/courses/${course.id}/assignment_groups?per_page=100`,
@@ -75,6 +103,7 @@ async function collectCanvasData() {
     } catch {
       /* Keep the last successful group snapshot. */
     }
+
     try {
       // Fetch assignments separately: nested group assignments can be truncated.
       const rows = await list(
@@ -94,6 +123,8 @@ async function collectCanvasData() {
           name: a.name,
           dueAt: a.due_at,
           pointsPossible: a.points_possible,
+          gradingType: a.grading_type,
+          omitFromFinalGrade: !!a.omit_from_final_grade,
           htmlUrl: a.html_url,
           submissionState: sub.workflow_state || null,
           submittedAt: sub.submitted_at || null,
@@ -112,6 +143,8 @@ async function collectCanvasData() {
             score: sub.score,
             grade: sub.grade,
             pointsPossible: a.points_possible,
+            gradingType: a.grading_type,
+            omitFromFinalGrade: !!a.omit_from_final_grade,
             gradedAt: sub.graded_at,
             submittedAt: sub.submitted_at,
             excused: !!sub.excused,
@@ -125,6 +158,7 @@ async function collectCanvasData() {
     } catch {
       /* Do not replace good assignment/grade data with an empty failed fetch. */
     }
+
     try {
       // Canvas defaults this endpoint to a short date window. Request the whole
       // course history so Acadence can show older announcements on first sync.
@@ -147,6 +181,7 @@ async function collectCanvasData() {
     } catch {
       /* Preserve the previous announcement snapshot on failure. */
     }
+
     try {
       const rows = await list(
         `/api/v1/courses/${course.id}/modules?include[]=items&per_page=100`,
@@ -178,6 +213,7 @@ async function collectCanvasData() {
     } catch {
       /* Preserve the previous module snapshot on failure. */
     }
+
     try {
       const rows = await list(`/api/v1/courses/${course.id}/files?per_page=100`);
       files.push(
@@ -196,6 +232,7 @@ async function collectCanvasData() {
     } catch {
       /* Preserve the previous file snapshot on failure. */
     }
+
     try {
       const rows = await list(`/api/v1/courses/${course.id}/pages?per_page=100`);
       pages.push(
@@ -216,6 +253,7 @@ async function collectCanvasData() {
       /* Preserve the previous page snapshot on failure. */
     }
   }
+
   return {
     source: "canvas",
     canvasOrigin: location.origin,
@@ -230,6 +268,9 @@ async function collectCanvasData() {
         endAt: c.end_at,
         syllabusBody: c.syllabus_body || "",
         applyAssignmentGroupWeights: !!c.apply_assignment_group_weights,
+        gradingStandardId:
+          c.grading_standard_id == null ? undefined : String(c.grading_standard_id),
+        gradingScheme: gradingSchemes.get(String(c.id)) || [],
         currentScore:
           e?.computed_current_score ?? e?.current_grading_period_score ?? null,
         currentGrade:
