@@ -8,10 +8,10 @@ import { DesktopSidebar } from '@/components/DesktopSidebar';
 const routes: NavigationItemId[] = [
   'home',
   'courses',
+  'grades',
   'tasks',
   'calendar',
   'announcements',
-  'grades',
   'inbox',
   'files',
   'ai',
