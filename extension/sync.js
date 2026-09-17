@@ -71,11 +71,50 @@ async function collectCanvasData() {
     }
     return matches.slice(0, 20);
   };
+  const enrollmentFor = (course) =>
+    Array.isArray(course?.enrollments) ? course.enrollments[0] || null : null;
+  const courseGradeSummary = (course, enrollmentState) => {
+    const e = enrollmentFor(course);
+    return {
+      id: String(course.id),
+      name: course.name,
+      courseCode: course.course_code,
+      startAt: course.start_at,
+      endAt: course.end_at,
+      termName: course.term?.name || null,
+      enrollmentState,
+      currentScore:
+        e?.computed_current_score ?? e?.current_grading_period_score ?? null,
+      currentGrade:
+        e?.computed_current_grade ?? e?.current_grading_period_grade ?? null,
+      finalScore: e?.computed_final_score ?? null,
+      finalGrade: e?.computed_final_grade ?? null,
+    };
+  };
 
   const profile = await (await request("/api/v1/users/self/profile")).json();
   const courses = await list(
-    "/api/v1/courses?enrollment_state=active&include[]=total_scores&include[]=current_grading_period_scores&include[]=syllabus_body&per_page=100",
+    "/api/v1/courses?enrollment_state=active&include[]=total_scores&include[]=current_grading_period_scores&include[]=syllabus_body&include[]=term&per_page=100",
   );
+  let historicalCourseRows = [],
+    historicalCoursesComplete = false;
+  try {
+    historicalCourseRows = await list(
+      "/api/v1/courses?enrollment_state=completed&include[]=total_scores&include[]=term&per_page=100",
+    );
+    historicalCoursesComplete = true;
+  } catch {
+    /* Some Canvas instances restrict concluded-course history. Keep the prior snapshot. */
+  }
+  const activeCourseIds = new Set(courses.map((course) => String(course.id)));
+  const historicalCourses = historicalCourseRows
+    .filter((course) => !activeCourseIds.has(String(course.id)))
+    .map((course) => courseGradeSummary(course, "completed"))
+    .sort(
+      (a, b) =>
+        Date.parse(b.endAt || b.startAt || 0) - Date.parse(a.endAt || a.startAt || 0),
+    );
+
   const assignments = [],
     announcements = [],
     grades = [],
@@ -304,27 +343,19 @@ async function collectCanvasData() {
     canvasOrigin: location.origin,
     profile: { id: String(profile.id), name: profile.name },
     courses: courses.map((c) => {
-      const e = Array.isArray(c.enrollments) ? c.enrollments[0] : null;
+      const summary = courseGradeSummary(c, "active");
       return {
-        id: String(c.id),
-        name: c.name,
-        courseCode: c.course_code,
-        startAt: c.start_at,
-        endAt: c.end_at,
+        ...summary,
         syllabusBody: c.syllabus_body || "",
         syllabusWeights: extractSyllabusWeights(c.syllabus_body),
         applyAssignmentGroupWeights: !!c.apply_assignment_group_weights,
         gradingStandardId:
           c.grading_standard_id == null ? undefined : String(c.grading_standard_id),
         gradingScheme: gradingSchemes.get(String(c.id)) || [],
-        currentScore:
-          e?.computed_current_score ?? e?.current_grading_period_score ?? null,
-        currentGrade:
-          e?.computed_current_grade ?? e?.current_grading_period_grade ?? null,
-        finalScore: e?.computed_final_score ?? null,
-        finalGrade: e?.computed_final_grade ?? null,
       };
     }),
+    historicalCourses,
+    historicalCoursesComplete,
     assignments,
     announcements,
     grades,
