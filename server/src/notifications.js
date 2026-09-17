@@ -1,11 +1,17 @@
 import { createHash } from "node:crypto";
 
 const HISTORY_VERSION = 1;
-const COLLECTIONS = [
+const NOTIFICATION_COLLECTIONS = [
   "assignments",
   "grades",
   "announcements",
   "assignmentGroups",
+];
+const DATA_COLLECTIONS = [
+  ...NOTIFICATION_COLLECTIONS,
+  "modules",
+  "files",
+  "pages",
 ];
 const date = (value) =>
   Number.isFinite(Date.parse(value)) ? new Date(value).toISOString() : null;
@@ -87,7 +93,7 @@ export function normalizePayload(data, now) {
     syncedAt: date(data.syncedAt) || now,
     receivedAt: now,
   };
-  for (const type of ["courses", ...COLLECTIONS]) {
+  for (const type of ["courses", ...DATA_COLLECTIONS]) {
     payload[type] = (Array.isArray(data[type]) ? data[type] : []).filter(
       (row) =>
         row && row.id != null && (type === "courses" || row.courseId != null),
@@ -159,7 +165,6 @@ function safeUrl(value, origin) {
 }
 
 export function syncAccount(account, payload, scope, now) {
-  // Slow older uploads must not turn a deadline/grade back into a new change.
   if (
     account.latest &&
     Date.parse(payload.syncedAt) < Date.parse(account.latest.syncedAt)
@@ -216,7 +221,7 @@ export function syncAccount(account, payload, scope, now) {
     });
   };
 
-  for (const type of COLLECTIONS) {
+  for (const type of NOTIFICATION_COLLECTIONS) {
     const seen = (account.snapshots[type] ||= {});
     const initialized = (account.initialized[type] ||= {});
     const historyBackfill = (account.historyBackfill[type] ||= {});
@@ -333,7 +338,6 @@ export function syncAccount(account, payload, scope, now) {
         );
       }
 
-      // Retain missing observations across partial responses. Do not observe future announcements.
       if (
         type !== "announcements" ||
         !next.postedAt ||
@@ -351,9 +355,9 @@ export function syncAccount(account, payload, scope, now) {
     }
   }
 
-  // Preserve the last good data for failed collections without hiding successful changes.
+  // Preserve the last good data for any failed collection without hiding successful changes.
   const latest = { ...payload };
-  for (const type of COLLECTIONS) {
+  for (const type of DATA_COLLECTIONS) {
     const successful = payload.completeCourseIds?.[type];
     const completed = Array.isArray(successful)
       ? new Set(successful.map(String))
