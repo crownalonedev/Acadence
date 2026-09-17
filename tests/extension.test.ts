@@ -21,7 +21,24 @@ async function collect(failSecondPage = false) {
         link = '',
         status = 200;
       if (url.pathname.endsWith('/profile')) rows = { id: 42, name: 'Student' };
-      else if (url.pathname.endsWith('/courses')) {
+      else if (url.pathname.endsWith('/users/self/enrollments')) {
+        rows = [
+          {
+            id: 808,
+            course_id: 8,
+            workflow_state: 'completed',
+            grades: {
+              current_score: 84,
+              current_grade: 'B',
+              final_score: 84,
+              final_grade: 'B',
+            },
+          },
+        ];
+      } else if (url.pathname.endsWith('/courses/8')) {
+        status = 403;
+        rows = {};
+      } else if (url.pathname.endsWith('/courses')) {
         if (url.searchParams.get('enrollment_state') === 'completed') {
           rows = [
             {
@@ -162,7 +179,7 @@ async function collect(failSecondPage = false) {
   };
 }
 
-test('collector follows pagination and includes course content plus current and historical grade data', async () => {
+test('collector follows pagination and includes current, completed, and hidden prior-course grade data', async () => {
   const { data, requests } = await collect();
   assert.equal(data.assignments.length, 2);
   assert.equal(data.assignments[0].submissionState, 'submitted');
@@ -174,11 +191,18 @@ test('collector follows pagination and includes course content plus current and 
   assert.equal(data.courses[0].currentGrade, 'A');
   assert.equal(data.courses[0].termName, 'Fall 2026');
   assert.equal(data.courses[0].imageUrl, 'https://school.instructure.com/images/course-10.png');
-  assert.equal(data.historicalCourses.length, 1);
-  assert.equal(data.historicalCourses[0].courseCode, 'OLD 101');
-  assert.equal(data.historicalCourses[0].finalGrade, 'A-');
-  assert.equal(data.historicalCourses[0].finalScore, 90);
-  assert.equal(data.historicalCourses[0].termName, 'Fall 2025');
+  assert.equal(data.historicalCourses.length, 2);
+  const completed = data.historicalCourses.find((course: any) => String(course.id) === '9');
+  assert.ok(completed);
+  assert.equal(completed.courseCode, 'OLD 101');
+  assert.equal(completed.finalGrade, 'A-');
+  assert.equal(completed.finalScore, 90);
+  assert.equal(completed.termName, 'Fall 2025');
+  const hidden = data.historicalCourses.find((course: any) => String(course.id) === '8');
+  assert.ok(hidden);
+  assert.equal(hidden.finalGrade, 'B');
+  assert.equal(hidden.finalScore, 84);
+  assert.equal(hidden.name, 'Previous course 8');
   assert.equal(data.historicalCoursesComplete, true);
   assert.equal(data.modules[0].name, 'Week 1');
   assert.equal(data.modules[0].items[0].title, 'Lecture');
@@ -207,6 +231,9 @@ test('collector follows pagination and includes course content plus current and 
       (url) => url.includes('/courses') && url.includes('course_image'),
     ),
   );
+  assert.ok(requests.some((url) => url.includes('/users/self/enrollments')));
+  assert.ok(requests.some((url) => url.includes('state%5B%5D=completed')));
+  assert.ok(requests.some((url) => url.includes('state%5B%5D=inactive')));
   const announcements = new URL(
     requests.find((url) => url.includes('/announcements'))!,
   );
@@ -230,5 +257,5 @@ test('failed later assignment page discards that partial collection but keeps su
   assert.equal(data.modules.length, 1);
   assert.equal(data.files.length, 1);
   assert.equal(data.pages.length, 1);
-  assert.equal(data.historicalCourses.length, 1);
+  assert.equal(data.historicalCourses.length, 2);
 });
