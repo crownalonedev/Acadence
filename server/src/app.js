@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import { Readable } from "node:stream";
 import {
   emptyAccount,
   normalizePayload,
@@ -74,6 +75,70 @@ export function createApp(store, clock = () => new Date().toISOString()) {
       notificationFeed: notificationFeed(state.activeScope, account),
     });
   });
+
+  app.get("/api/connector/files/:fileId/content", async (req, res, next) => {
+    try {
+      const state = store.read(),
+        account = state.accounts[state.activeScope],
+        file = account?.latest?.files?.find(
+          (row) => String(row.id) === String(req.params.fileId),
+        );
+      if (!file)
+        return res.status(404).json({ error: "Canvas file not found. Sync Canvas again." });
+
+      const target = file.publicUrl || file.downloadUrl;
+      if (!target)
+        return res.status(409).json({
+          error: "Canvas did not provide an embeddable file URL. Reload the extension and sync again.",
+        });
+
+      let parsed;
+      try {
+        parsed = new URL(target);
+      } catch {
+        return res.status(400).json({ error: "Canvas returned an invalid file URL." });
+      }
+      if (!["https:", "http:"].includes(parsed.protocol))
+        return res.status(400).json({ error: "Unsupported Canvas file URL." });
+
+      const headers = {};
+      if (req.headers.range) headers.Range = req.headers.range;
+      const upstream = await fetch(parsed.href, {
+        headers,
+        redirect: "follow",
+      });
+      if (!upstream.ok && upstream.status !== 206) {
+        const message =
+          upstream.status === 401 || upstream.status === 403
+            ? "Canvas file access expired. Reload the Acadence extension and sync Canvas once."
+            : `Canvas file request failed (${upstream.status}).`;
+        return res.status(502).json({ error: message });
+      }
+
+      res.status(upstream.status);
+      for (const name of [
+        "content-type",
+        "content-length",
+        "content-range",
+        "accept-ranges",
+        "etag",
+        "last-modified",
+      ]) {
+        const value = upstream.headers.get(name);
+        if (value) res.set(name, value);
+      }
+      const filename = String(file.filename || file.displayName || "canvas-file")
+        .replace(/[\r\n"]/g, "")
+        .slice(0, 180);
+      res.set("Content-Disposition", `inline; filename="${filename}"`);
+      res.set("X-Content-Type-Options", "nosniff");
+      if (!upstream.body) return res.end();
+      Readable.fromWeb(upstream.body).pipe(res);
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.post("/api/notifications/read", async (req, res) => {
     const { scope, ids } = req.body || {};
     if (
