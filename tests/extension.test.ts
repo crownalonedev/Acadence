@@ -26,7 +26,8 @@ async function collect(failSecondPage = false) {
           {
             id: 10,
             name: 'Course',
-            syllabus_body: '<h2>Course Description</h2><p>Welcome</p>',
+            syllabus_body:
+              '<h2>Grade Breakdown</h2><p>Projects 30%</p><p>Exams 70%</p>',
             grading_standard_id: 77,
             apply_assignment_group_weights: true,
           },
@@ -41,7 +42,9 @@ async function collect(failSecondPage = false) {
           ],
         };
       else if (url.pathname.endsWith('/assignment_groups'))
-        rows = [{ id: 5, name: 'Projects', group_weight: 30, rules: { drop_lowest: 1 } }];
+        rows = [
+          { id: 5, name: 'Projects', group_weight: 30, rules: { drop_lowest: 1 } },
+        ];
       else if (url.pathname.endsWith('/assignments')) {
         if (url.searchParams.get('page') === '2') {
           status = failSecondPage ? 503 : 200;
@@ -140,7 +143,14 @@ test('collector follows pagination and includes course content, weights, grading
   assert.equal(data.assignments[0].omitFromFinalGrade, false);
   assert.equal(data.grades[0].score, 0);
   assert.equal(data.grades[0].gradingType, 'points');
-  assert.equal(data.courses[0].syllabusBody, '<h2>Course Description</h2><p>Welcome</p>');
+  assert.equal(
+    data.courses[0].syllabusBody,
+    '<h2>Grade Breakdown</h2><p>Projects 30%</p><p>Exams 70%</p>',
+  );
+  assert.deepEqual(data.courses[0].syllabusWeights, [
+    { name: 'Grade Breakdown Projects', weight: 30 },
+    { name: 'Exams', weight: 70 },
+  ]);
   assert.equal(data.courses[0].applyAssignmentGroupWeights, true);
   assert.equal(data.courses[0].gradingStandardId, '77');
   assert.deepEqual(data.courses[0].gradingScheme, [
