@@ -16,10 +16,8 @@ const API = (
 ).replace(/\/$/, "");
 const KEY = "acadence.currentCourses";
 
-export type SyncedGradingSchemeEntry = {
-  name: string;
-  value: number;
-};
+export type SyncedGradingSchemeEntry = { name: string; value: number };
+export type SyncedWeightHint = { name: string; weight: number };
 
 export type SyncedCourse = {
   id: string | number;
@@ -29,6 +27,7 @@ export type SyncedCourse = {
   startAt?: string | null;
   endAt?: string | null;
   syllabusBody?: string;
+  syllabusWeights?: SyncedWeightHint[];
   applyAssignmentGroupWeights?: boolean;
   gradingStandardId?: string;
   gradingScheme?: SyncedGradingSchemeEntry[];
@@ -196,8 +195,7 @@ const loadSelection = (): string[] => {
 
 export function CanvasDataProvider({ children }: PropsWithChildren) {
   const [raw, setRaw] = useState<any>(empty);
-  const [selectedCourseIds, setSelectedState] =
-    useState<string[]>(loadSelection);
+  const [selectedCourseIds, setSelectedState] = useState<string[]>(loadSelection);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
@@ -218,9 +216,7 @@ export function CanvasDataProvider({ children }: PropsWithChildren) {
     const controller = new AbortController(),
       timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch(`${API}/api/connector/data`, {
-        signal: controller.signal,
-      });
+      const response = await fetch(`${API}/api/connector/data`, { signal: controller.signal });
       if (response.status === 404) {
         setRaw(empty());
         setError(null);
@@ -259,16 +255,12 @@ export function CanvasDataProvider({ children }: PropsWithChildren) {
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") void refresh();
     });
-    const onFocus = () => {
-      void refresh();
-    };
-    if (typeof window !== "undefined")
-      window.addEventListener("focus", onFocus);
+    const onFocus = () => void refresh();
+    if (typeof window !== "undefined") window.addEventListener("focus", onFocus);
     return () => {
       clearInterval(interval);
       subscription.remove();
-      if (typeof window !== "undefined")
-        window.removeEventListener("focus", onFocus);
+      if (typeof window !== "undefined") window.removeEventListener("focus", onFocus);
     };
   }, [refresh]);
 
@@ -324,7 +316,6 @@ export function CanvasDataProvider({ children }: PropsWithChildren) {
 
 export function useCanvasData() {
   const value = useContext(C);
-  if (!value)
-    throw new Error("useCanvasData must be inside CanvasDataProvider");
+  if (!value) throw new Error("useCanvasData must be inside CanvasDataProvider");
   return value;
 }
