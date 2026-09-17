@@ -58,12 +58,14 @@ export function parseSyllabusGradingScheme(html?: string): SyncedGradingSchemeEn
   };
 
   for (const letter of letters) {
-    const escaped = letter.replace('+', '\\+').replace('-', '\\-');
+    const escaped = letter.replace(/[+\-]/g, '\\$&');
+    const lead = `(?:^|[\\s,(])${escaped}(?=[\\s,:=≥>]|$)`;
+    const tail = `(?:^|[\\s,(])${escaped}(?=[\\s,.;)]|$)`;
     const patterns = [
-      new RegExp(`\\b${escaped}\\b\\s*(?:[:=]|is|>=|≥)?\\s*(\\d{1,3}(?:\\.\\d+)?)\\s*%?`, 'i'),
-      new RegExp(`\\b${escaped}\\b\\s*(\\d{1,3}(?:\\.\\d+)?)\\s*(?:-|–|—|to)\\s*\\d{1,3}(?:\\.\\d+)?\\s*%?`, 'i'),
-      new RegExp(`(\\d{1,3}(?:\\.\\d+)?)\\s*(?:-|–|—|to)\\s*\\d{1,3}(?:\\.\\d+)?\\s*%?\\s*${escaped}\\b`, 'i'),
-      new RegExp(`(?:>=|≥)\\s*(\\d{1,3}(?:\\.\\d+)?)\\s*%?\\s*${escaped}\\b`, 'i'),
+      new RegExp(`${lead}\\s*(?:[:=]|is|>=|≥)?\\s*(\\d{1,3}(?:\\.\\d+)?)\\s*%?`, 'im'),
+      new RegExp(`${lead}\\s*(\\d{1,3}(?:\\.\\d+)?)\\s*(?:-|–|—|to)\\s*\\d{1,3}(?:\\.\\d+)?\\s*%?`, 'im'),
+      new RegExp(`(\\d{1,3}(?:\\.\\d+)?)\\s*(?:-|–|—|to)\\s*\\d{1,3}(?:\\.\\d+)?\\s*%?\\s*${tail}`, 'im'),
+      new RegExp(`(?:>=|≥)\\s*(\\d{1,3}(?:\\.\\d+)?)\\s*%?\\s*${tail}`, 'im'),
     ];
     for (const pattern of patterns) {
       const match = text.match(pattern);
@@ -99,10 +101,17 @@ export function effectiveGradingScheme(course?: SyncedCourse | null) {
 
   return {
     scheme: [
-      { name: 'A', value: 90 },
-      { name: 'B', value: 80 },
-      { name: 'C', value: 70 },
-      { name: 'D', value: 60 },
+      { name: 'A', value: 93 },
+      { name: 'A-', value: 90 },
+      { name: 'B+', value: 87 },
+      { name: 'B', value: 83 },
+      { name: 'B-', value: 80 },
+      { name: 'C+', value: 77 },
+      { name: 'C', value: 73 },
+      { name: 'C-', value: 70 },
+      { name: 'D+', value: 67 },
+      { name: 'D', value: 63 },
+      { name: 'D-', value: 60 },
       { name: 'F', value: 0 },
     ],
     estimated: true,
