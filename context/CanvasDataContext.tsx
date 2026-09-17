@@ -10,10 +10,17 @@ import {
 } from "react";
 import { AppState } from "react-native";
 import { NotificationFeed } from "@/services/notifications";
+
 const API = (
   process.env.EXPO_PUBLIC_ACADENCE_API_URL || "http://localhost:8787"
 ).replace(/\/$/, "");
 const KEY = "acadence.currentCourses";
+
+export type SyncedGradingSchemeEntry = {
+  name: string;
+  value: number;
+};
+
 export type SyncedCourse = {
   id: string | number;
   name: string;
@@ -23,11 +30,14 @@ export type SyncedCourse = {
   endAt?: string | null;
   syllabusBody?: string;
   applyAssignmentGroupWeights?: boolean;
+  gradingStandardId?: string;
+  gradingScheme?: SyncedGradingSchemeEntry[];
   currentScore?: number | null;
   currentGrade?: string | null;
   finalScore?: number | null;
   finalGrade?: string | null;
 };
+
 export type SyncedAssignment = {
   id: string | number;
   courseId: string | number;
@@ -35,6 +45,8 @@ export type SyncedAssignment = {
   name: string;
   dueAt?: string | null;
   pointsPossible?: number | null;
+  gradingType?: string;
+  omitFromFinalGrade?: boolean;
   htmlUrl?: string;
   submissionState?: string | null;
   submittedAt?: string | null;
@@ -43,6 +55,7 @@ export type SyncedAssignment = {
   missing?: boolean;
   late?: boolean;
 };
+
 export type SyncedAnnouncement = {
   id: string;
   courseId: string;
@@ -52,6 +65,7 @@ export type SyncedAnnouncement = {
   author?: string;
   htmlUrl?: string;
 };
+
 export type SyncedGrade = {
   id: string;
   courseId: string;
@@ -61,6 +75,8 @@ export type SyncedGrade = {
   score?: number | null;
   grade?: string | null;
   pointsPossible?: number | null;
+  gradingType?: string;
+  omitFromFinalGrade?: boolean;
   gradedAt?: string | null;
   submittedAt?: string | null;
   excused?: boolean;
@@ -68,6 +84,7 @@ export type SyncedGrade = {
   missing?: boolean;
   htmlUrl?: string;
 };
+
 export type SyncedAssignmentGroup = {
   id: string;
   courseId: string;
@@ -76,6 +93,7 @@ export type SyncedAssignmentGroup = {
   rules?: any;
   position?: number;
 };
+
 export type SyncedModuleItem = {
   id: string;
   moduleId: string;
@@ -88,6 +106,7 @@ export type SyncedModuleItem = {
   htmlUrl?: string;
   completionRequirement?: any;
 };
+
 export type SyncedModule = {
   id: string;
   courseId: string;
@@ -98,6 +117,7 @@ export type SyncedModule = {
   prerequisiteModuleIds?: string[];
   items?: SyncedModuleItem[];
 };
+
 export type SyncedFile = {
   id: string;
   courseId: string;
@@ -108,6 +128,7 @@ export type SyncedFile = {
   updatedAt?: string;
   htmlUrl?: string;
 };
+
 export type SyncedPage = {
   id: string;
   courseId: string;
@@ -117,6 +138,7 @@ export type SyncedPage = {
   frontPage?: boolean;
   htmlUrl?: string;
 };
+
 type CanvasData = {
   connected: boolean;
   canvasOrigin?: string;
@@ -145,6 +167,7 @@ type CanvasData = {
   refresh: () => Promise<void>;
   notificationFeed: NotificationFeed | null;
 };
+
 const C = createContext<CanvasData | null>(null);
 const empty = () => ({
   connected: false,
@@ -158,6 +181,7 @@ const empty = () => ({
   pages: [],
   notificationFeed: null,
 });
+
 const loadSelection = (): string[] => {
   try {
     const value =
@@ -177,6 +201,7 @@ export function CanvasDataProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const inFlight = useRef(false);
+
   const setSelectedCourseIds = (ids: string[]) => {
     setSelectedState(ids);
     try {
@@ -186,6 +211,7 @@ export function CanvasDataProvider({ children }: PropsWithChildren) {
       /* Preferences still work in memory. */
     }
   };
+
   const refresh = useCallback(async () => {
     if (inFlight.current) return;
     inFlight.current = true;
@@ -226,6 +252,7 @@ export function CanvasDataProvider({ children }: PropsWithChildren) {
       setLoading(false);
     }
   }, []);
+
   useEffect(() => {
     void refresh();
     const interval = setInterval(refresh, 15000);
@@ -244,6 +271,7 @@ export function CanvasDataProvider({ children }: PropsWithChildren) {
         window.removeEventListener("focus", onFocus);
     };
   }, [refresh]);
+
   const value = useMemo(() => {
     const allCourses: SyncedCourse[] = raw.courses,
       allAssignments: SyncedAssignment[] = raw.assignments,
@@ -290,8 +318,10 @@ export function CanvasDataProvider({ children }: PropsWithChildren) {
       notificationFeed: raw.notificationFeed,
     };
   }, [raw, selectedCourseIds, loading, error, refresh]);
+
   return <C.Provider value={value}>{children}</C.Provider>;
 }
+
 export function useCanvasData() {
   const value = useContext(C);
   if (!value)
