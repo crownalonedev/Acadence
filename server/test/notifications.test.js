@@ -110,11 +110,11 @@ async function harness(t) {
   };
 }
 
-test("initial backfill includes only announcements/grades within seven days; zero is a grade", async (t) => {
+test("initial backfill includes the full available announcement/grade history; zero is a grade", async (t) => {
   const h = await harness(t),
     data = payload();
   for (const [id, time] of [
-    ["old", "2026-09-09T11:59:59Z"],
+    ["old", "2026-08-01T11:59:59Z"],
     ["boundary", "2026-09-09T12:00:00Z"],
     ["future", "2026-09-17T00:00:00Z"],
     ["unknown", null],
@@ -124,8 +124,10 @@ test("initial backfill includes only announcements/grades within seven days; zer
   }
   assert.equal((await h.sync(data)).status, 200);
   const { notifications } = await h.feed();
-  assert.equal(notifications.length, 4);
-  assert.equal(notifications.filter((n) => n.kind === "grade").length, 2);
+  assert.equal(notifications.length, 9);
+  assert.equal(notifications.filter((n) => n.kind === "grade").length, 5);
+  assert.equal(notifications.filter((n) => n.kind === "announcement").length, 4);
+  assert.ok(notifications.some((n) => n.occurredAt === "2026-08-01T11:59:59.000Z"));
   assert.ok(notifications.some((n) => n.body.includes("0 / 10")));
   assert.ok(notifications.some((n) => n.body.includes("Read & prepare")));
   assert.ok(notifications.every((n) => n.readAt === null));
@@ -277,7 +279,7 @@ test("account scopes, disconnect/reconnect, and stale uploads do not erase read 
   assert.notEqual((await h.feed()).scope, original.scope);
 });
 
-test("failed initial collection is baselined when it first succeeds; empty successful collections detect new items", async (t) => {
+test("failed initial collection is backfilled when it first succeeds; empty successful collections detect new items", async (t) => {
   const h = await harness(t),
     data = payload();
   await h.sync(

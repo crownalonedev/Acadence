@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-const WEEK = 7 * 24 * 60 * 60 * 1000;
+const HISTORY_VERSION = 1;
 const COLLECTIONS = [
   "assignments",
   "grades",
@@ -106,6 +106,7 @@ export const emptyAccount = () => ({
   notifications: [],
   snapshots: {},
   initialized: {},
+  historyBackfill: {},
   latest: null,
 });
 
@@ -164,35 +165,61 @@ export function syncAccount(account, payload, scope, now) {
     Date.parse(payload.syncedAt) < Date.parse(account.latest.syncedAt)
   )
     return false;
+
+  account.historyBackfill ||= {};
   const courseName = (id) =>
     plainText(
       payload.courses.find((c) => String(c.id) === String(id))?.courseCode ||
         payload.courses.find((c) => String(c.id) === String(id))?.name ||
         "Canvas",
     );
-  const recent = (value) => {
-    const t = Date.parse(value);
-    return t >= Date.parse(now) - WEEK && t <= Date.parse(now);
+  const historicalTime = (value) => {
+    const parsed = date(value);
+    return parsed && Date.parse(parsed) <= Date.parse(now) ? parsed : now;
   };
-  const add = (row, kind, title, body, occurredAt = now, dueAt) => {
+  const add = (
+    row,
+    kind,
+    title,
+    body,
+    occurredAt = now,
+    dueAt,
+    dedupe = false,
+  ) => {
+    const normalizedTime = historicalTime(occurredAt),
+      normalizedBody = `${courseName(row.courseId)} · ${body}`,
+      htmlUrl = row.htmlUrl
+        ? safeUrl(row.htmlUrl, payload.canvasOrigin)
+        : undefined;
+    if (
+      dedupe &&
+      account.notifications.some(
+        (notice) =>
+          String(notice.courseId) === String(row.courseId) &&
+          notice.kind === kind &&
+          notice.title === title &&
+          notice.body === normalizedBody &&
+          notice.occurredAt === normalizedTime,
+      )
+    )
+      return;
     account.notifications.push({
       id: `${scope}:${++account.sequence}`,
       courseId: String(row.courseId),
       kind,
       title,
-      body: `${courseName(row.courseId)} · ${body}`,
-      occurredAt,
+      body: normalizedBody,
+      occurredAt: normalizedTime,
       readAt: null,
       dueAt,
-      htmlUrl: row.htmlUrl
-        ? safeUrl(row.htmlUrl, payload.canvasOrigin)
-        : undefined,
+      htmlUrl,
     });
   };
 
   for (const type of COLLECTIONS) {
     const seen = (account.snapshots[type] ||= {});
     const initialized = (account.initialized[type] ||= {});
+    const historyBackfill = (account.historyBackfill[type] ||= {});
     const successful = payload.completeCourseIds?.[type];
     const completed = Array.isArray(successful)
       ? new Set(successful.map(String))
@@ -204,8 +231,12 @@ export function syncAccount(account, payload, scope, now) {
       const id = key(row),
         courseKey = JSON.stringify(String(row.courseId)),
         old = seen[id],
-        next = snapshot(type, row);
-      const firstCourseSync = !initialized[courseKey];
+        next = snapshot(type, row),
+        firstCourseSync = !initialized[courseKey],
+        needsHistoryBackfill =
+          (type === "grades" || type === "announcements") &&
+          historyBackfill[courseKey] !== HISTORY_VERSION;
+
       if (type === "assignments" && !firstCourseSync) {
         if (!old)
           add(row, "assignment", "New assignment", `${next.name} was added.`);
@@ -226,45 +257,69 @@ export function syncAccount(account, payload, scope, now) {
             `${next.name}: assignment details changed.`,
           );
       }
+
       if (
         type === "grades" &&
         (next.score != null || next.grade != null || next.excused)
       ) {
-        if (
-          (!old && (!firstCourseSync || recent(row.gradedAt))) ||
+        const result = next.excused
+          ? "Excused"
+          : next.score != null
+            ? `${next.score}${next.pointsPossible != null ? ` / ${next.pointsPossible}` : ""}${next.grade != null ? ` (${next.grade})` : ""}`
+            : next.grade;
+        if (needsHistoryBackfill) {
+          add(
+            row,
+            "grade",
+            "New grade posted",
+            `${plainText(row.name)}: ${result}.`,
+            row.gradedAt,
+            undefined,
+            true,
+          );
+        } else if (
+          (!old && !firstCourseSync) ||
           (old && stable(old) !== stable(next))
         ) {
-          const result = next.excused
-            ? "Excused"
-            : next.score != null
-              ? `${next.score}${next.pointsPossible != null ? ` / ${next.pointsPossible}` : ""}${next.grade != null ? ` (${next.grade})` : ""}`
-              : next.grade;
           add(
             row,
             "grade",
             old ? "Grade updated" : "New grade posted",
             `${plainText(row.name)}: ${result}.`,
-            !old && recent(row.gradedAt) ? date(row.gradedAt) : now,
+            !old ? row.gradedAt : now,
           );
         }
       }
+
       if (
         type === "announcements" &&
         (!next.postedAt || Date.parse(next.postedAt) <= Date.parse(now))
       ) {
-        if (
-          (!old && (!firstCourseSync || recent(row.postedAt))) ||
+        const body = `${next.title}${next.message ? ` — ${next.message.slice(0, 4000)}` : ""}`;
+        if (needsHistoryBackfill) {
+          add(
+            row,
+            "announcement",
+            "New announcement",
+            body,
+            next.postedAt,
+            undefined,
+            true,
+          );
+        } else if (
+          (!old && !firstCourseSync) ||
           (old && stable(old) !== stable(next))
         ) {
           add(
             row,
             "announcement",
             old ? "Announcement updated" : "New announcement",
-            `${next.title}${next.message ? ` — ${next.message.slice(0, 4000)}` : ""}`,
-            !old && recent(row.postedAt) ? next.postedAt : now,
+            body,
+            !old ? next.postedAt : now,
           );
         }
       }
+
       if (
         type === "assignmentGroups" &&
         !firstCourseSync &&
@@ -277,6 +332,7 @@ export function syncAccount(account, payload, scope, now) {
           `${next.name}: ${old ? "grading rules or group details changed" : "a grading group was added"}${next.weight != null ? ` (weight: ${next.weight}%)` : ""}.`,
         );
       }
+
       // Retain missing observations across partial responses. Do not observe future announcements.
       if (
         type !== "announcements" ||
@@ -285,8 +341,14 @@ export function syncAccount(account, payload, scope, now) {
       )
         seen[id] = next;
     }
-    for (const courseId of completed || rows.map((row) => String(row.courseId)))
-      initialized[JSON.stringify(String(courseId))] = true;
+
+    const completedCourseIds = completed || rows.map((row) => String(row.courseId));
+    for (const courseId of completedCourseIds) {
+      const courseKey = JSON.stringify(String(courseId));
+      initialized[courseKey] = true;
+      if (type === "grades" || type === "announcements")
+        historyBackfill[courseKey] = HISTORY_VERSION;
+    }
   }
 
   // Preserve the last good data for failed collections without hiding successful changes.
@@ -318,7 +380,6 @@ export function syncAccount(account, payload, scope, now) {
       Date.parse(b.occurredAt) - Date.parse(a.occurredAt) ||
       Number(b.id.split(":").at(-1)) - Number(a.id.split(":").at(-1)),
   );
-  account.notifications = account.notifications.slice(0, 500);
   account.revision++;
   return true;
 }
