@@ -43,8 +43,10 @@ const family = (item: CourseViewerItem) => {
     type.includes('spreadsheet') ||
     type.includes('powerpoint') ||
     type.includes('presentation')
-  ) return 'office';
-  if (type.startsWith('text/') || ['txt', 'csv', 'json', 'xml', 'md', 'html', 'htm'].includes(ext)) return 'text';
+  )
+    return 'office';
+  if (type.startsWith('text/') || ['txt', 'csv', 'json', 'xml', 'md', 'html', 'htm'].includes(ext))
+    return 'text';
   return 'frame';
 };
 
@@ -54,7 +56,11 @@ export function CourseAssetViewer({ item, onClose }: { item: CourseViewerItem; o
   const proxied = item.fileId
     ? `${API}/api/connector/files/${encodeURIComponent(item.fileId)}/content`
     : undefined;
-  const rawUrl = proxied || item.publicUrl || item.url || item.canvasUrl;
+
+  // Canvas's /public_url endpoint is specifically intended to create a temporary
+  // browser-usable file URL. Prefer it over the local proxy when it exists; the
+  // proxy remains the fallback for schools that only return a signed download URL.
+  const rawUrl = item.publicUrl || proxied || item.url;
   const officeUrl = useMemo(
     () =>
       item.publicUrl
@@ -63,6 +69,7 @@ export function CourseAssetViewer({ item, onClose }: { item: CourseViewerItem; o
     [item.publicUrl],
   );
   const displayUrl = type === 'office' ? officeUrl : rawUrl;
+  const canvasOnly = !item.html && !displayUrl && !!item.canvasUrl;
 
   return (
     <View style={[s.wrap, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
@@ -74,10 +81,27 @@ export function CourseAssetViewer({ item, onClose }: { item: CourseViewerItem; o
           <Text numberOfLines={1} style={[s.title, { color: colors.text }]}>{item.title}</Text>
           <Text style={[s.sub, { color: colors.muted }]}>Acadence viewer</Text>
         </View>
+        {rawUrl ? (
+          <Pressable
+            onPress={() => window.open(rawUrl, '_blank', 'noopener,noreferrer')}
+            style={({ hovered }: any) => [
+              s.action,
+              { borderColor: colors.border },
+              hovered && { transform: [{ translateY: -1 }] },
+            ]}
+          >
+            <ArrowUpRight size={14} color={colors.accent} />
+            <Text style={[s.actionText, { color: colors.accent }]}>Open file</Text>
+          </Pressable>
+        ) : null}
         {item.canvasUrl ? (
           <Pressable
             onPress={() => window.open(item.canvasUrl, '_blank', 'noopener,noreferrer')}
-            style={({ hovered }: any) => [s.action, { borderColor: colors.border }, hovered && { transform: [{ translateY: -1 }] }]}
+            style={({ hovered }: any) => [
+              s.action,
+              { borderColor: colors.border },
+              hovered && { transform: [{ translateY: -1 }] },
+            ]}
           >
             <ArrowUpRight size={14} color={colors.accent} />
             <Text style={[s.actionText, { color: colors.accent }]}>Canvas</Text>
@@ -93,10 +117,15 @@ export function CourseAssetViewer({ item, onClose }: { item: CourseViewerItem; o
           <div style={{ padding: 24, minHeight: 360, overflow: 'auto' }}>
             <CanvasRichContent html={item.html} baseUrl={item.baseUrl} minHeight={300} />
           </div>
+        ) : canvasOnly ? (
+          <View style={s.empty}>
+            <Text style={[s.emptyTitle, { color: colors.text }]}>This Canvas item needs the signed-in Canvas page</Text>
+            <Text style={[s.emptyText, { color: colors.muted }]}>Acadence did not receive a standalone preview URL for this item. Use the Canvas button above instead of showing a broken unauthenticated frame.</Text>
+          </View>
         ) : !displayUrl ? (
           <View style={s.empty}>
             <Text style={[s.emptyTitle, { color: colors.text }]}>Preview unavailable</Text>
-            <Text style={[s.emptyText, { color: colors.muted }]}>Reload the Acadence extension and sync Canvas once. If the school still blocks the preview, use the Canvas button.</Text>
+            <Text style={[s.emptyText, { color: colors.muted }]}>Reload the Acadence extension and sync Canvas once. Signed file links can expire and are refreshed during sync.</Text>
           </View>
         ) : type === 'video' ? (
           <video src={displayUrl} controls playsInline style={{ width: '100%', height: '100%', maxHeight: 720, background: '#0d1511' }} />
@@ -108,6 +137,13 @@ export function CourseAssetViewer({ item, onClose }: { item: CourseViewerItem; o
           <div style={{ display: 'flex', minHeight: 480, width: '100%', alignItems: 'center', justifyContent: 'center', padding: 24, overflow: 'auto' }}>
             <img src={displayUrl} alt={item.title} style={{ maxWidth: '100%', maxHeight: '72vh', objectFit: 'contain' }} />
           </div>
+        ) : type === 'office' ? (
+          <iframe
+            title={item.title}
+            src={displayUrl}
+            style={{ width: '100%', height: '72vh', minHeight: 560, border: 0, background: '#fff' }}
+            allow="autoplay; fullscreen"
+          />
         ) : (
           <iframe
             title={item.title}
@@ -117,7 +153,7 @@ export function CourseAssetViewer({ item, onClose }: { item: CourseViewerItem; o
           />
         )}
       </View>
-      <Text style={[s.note, { color: colors.muted }]}>PDFs and media stream through Acadence using the temporary signed URL Canvas gives the student. Office files use an embedded document renderer. If a signed URL expires, reload the extension and sync Canvas again.</Text>
+      <Text style={[s.note, { color: colors.muted }]}>PDFs, images, audio and video use Canvas’s temporary signed file URL when available. Office documents use the signed URL with an embedded Office renderer. If a signed URL expires, reload the extension and sync Canvas again.</Text>
     </View>
   );
 }
@@ -133,7 +169,7 @@ const s = StyleSheet.create({
   close: { width: 34, height: 34, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   stage: { minHeight: 360 },
   empty: { minHeight: 360, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 7 },
-  emptyTitle: { fontSize: 15, fontWeight: '900' },
-  emptyText: { fontSize: 12, lineHeight: 18, textAlign: 'center', maxWidth: 520 },
+  emptyTitle: { fontSize: 15, fontWeight: '900', textAlign: 'center' },
+  emptyText: { fontSize: 12, lineHeight: 18, textAlign: 'center', maxWidth: 560 },
   note: { fontSize: 10, lineHeight: 15, padding: 12 },
 });
