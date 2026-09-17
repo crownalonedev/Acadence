@@ -122,7 +122,7 @@ export function PlayfulTaskToggle({
         >
           {label}
         </Text>
-        <View pointerEvents="none" style={s.strike}>
+        <View style={[s.strike, { pointerEvents: 'none' }]}> 
           <Svg
             width="100%"
             height="32"
