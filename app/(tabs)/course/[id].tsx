@@ -11,6 +11,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import {
   ArrowLeft,
   BookOpen,
+  Calculator,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -25,6 +26,7 @@ import {
 } from 'lucide-react-native';
 import Animated, { Layout } from 'react-native-reanimated';
 import { Screen } from '@/components/Screen';
+import { CanvasRichContent } from '@/components/CanvasRichContent';
 import { CourseAssetViewer, CourseViewerItem } from '@/components/CourseAssetViewer';
 import { useCanvasData } from '@/context/CanvasDataContext';
 import { useCourseAppearance } from '@/context/CourseAppearanceContext';
@@ -78,15 +80,24 @@ function dueDetails(value?: string | null) {
   if (!value) return { label: 'No due date', exact: '', urgency: 'none' as const };
   const when = new Date(value);
   const now = new Date();
-  const startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const startDue = new Date(when.getFullYear(), when.getMonth(), when.getDate()).getTime();
-  const days = Math.round((startDue - startToday) / 86400000);
-  const exact = when.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const dueDay = new Date(when.getFullYear(), when.getMonth(), when.getDate()).getTime();
+  const days = Math.round((dueDay - today) / 86400000);
+  const exact = when.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
   if (when.getTime() < Date.now()) return { label: 'Past due', exact, urgency: 'danger' as const };
   if (days === 0) return { label: 'Due today', exact, urgency: 'danger' as const };
   if (days === 1) return { label: 'Due tomorrow', exact, urgency: 'soon' as const };
   if (days <= 7) return { label: `Due in ${days} days`, exact, urgency: 'soon' as const };
-  return { label: `Due ${when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`, exact, urgency: 'normal' as const };
+  return {
+    label: `Due ${when.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`,
+    exact,
+    urgency: 'normal' as const,
+  };
 }
 
 export default function CourseDetail() {
@@ -95,6 +106,7 @@ export default function CourseDetail() {
   const { width } = useWindowDimensions();
   const desktop = Platform.OS === 'web' && width >= 980;
   const {
+    canvasOrigin,
     courses,
     assignments,
     announcements,
@@ -139,7 +151,14 @@ export default function CourseDetail() {
     ['submitted', 'graded', 'complete'].includes((a.submissionState || '').toLowerCase());
   const completionTime = (a: (typeof courseAssignments)[number]) => {
     const grade = courseGrades.find((g) => String(g.assignmentId) === String(a.id));
-    return new Date(grade?.gradedAt || grade?.submittedAt || a.gradedAt || a.submittedAt || a.dueAt || 0).getTime();
+    return new Date(
+      grade?.gradedAt ||
+        grade?.submittedAt ||
+        a.gradedAt ||
+        a.submittedAt ||
+        a.dueAt ||
+        0,
+    ).getTime();
   };
 
   const now = Date.now();
@@ -149,9 +168,12 @@ export default function CourseDetail() {
   const completedAssignments = courseAssignments
     .filter(isComplete)
     .sort((a, b) => completionTime(b) - completionTime(a));
-  const otherAssignments = courseAssignments.filter(
-    (a) => !isComplete(a) && (!a.dueAt || new Date(a.dueAt).getTime() < now),
-  );
+  const otherAssignments = courseAssignments
+    .filter((a) => !isComplete(a) && (!a.dueAt || new Date(a.dueAt).getTime() < now))
+    .sort(
+      (a, b) =>
+        new Date(b.dueAt || 0).getTime() - new Date(a.dueAt || 0).getTime(),
+    );
 
   const courseAnnouncements = announcements
     .filter((a) => String(a.courseId) === String(id))
@@ -167,7 +189,8 @@ export default function CourseDetail() {
     .sort((a, b) => Number(b.frontPage) - Number(a.frontPage) || a.title.localeCompare(b.title));
 
   useEffect(() => {
-    if (courseModules.length && openModules.size === 0) setOpenModules(new Set([String(courseModules[0].id)]));
+    if (courseModules.length && openModules.size === 0)
+      setOpenModules(new Set([String(courseModules[0].id)]));
   }, [courseModules.length]);
 
   if (!course)
@@ -182,6 +205,7 @@ export default function CourseDetail() {
     );
 
   const image = appearance[String(course.id)]?.image || fallback;
+  const baseUrl = canvasOrigin ? `${canvasOrigin}/courses/${course.id}/` : undefined;
   const weights = effectiveWeights(course, assignmentGroups);
   const currentCalculated = calculateGrade(
     course,
@@ -202,11 +226,47 @@ export default function CourseDetail() {
   const openInside = (item: CourseViewerItem) => setViewer(item);
   const fileViewer = (file: any): CourseViewerItem => ({
     title: file.displayName || file.filename || 'Course file',
-    url: file.previewUrl || file.downloadUrl || file.htmlUrl,
+    fileId: String(file.id),
+    publicUrl: file.publicUrl,
+    url: file.downloadUrl,
     canvasUrl: file.htmlUrl,
     contentType: file.contentType,
     filename: file.filename || file.displayName,
   });
+  const assignmentViewer = (assignment: any): CourseViewerItem => ({
+    title: assignment.name,
+    html: assignment.description || '',
+    baseUrl,
+    canvasUrl: assignment.htmlUrl,
+  });
+  const announcementViewer = (announcement: any): CourseViewerItem => ({
+    title: announcement.title,
+    html: announcement.message || '',
+    baseUrl,
+    canvasUrl: announcement.htmlUrl,
+  });
+  const pageViewer = (page: any): CourseViewerItem => ({
+    title: page.title,
+    html: page.body || '',
+    baseUrl,
+    canvasUrl: page.htmlUrl,
+  });
+
+  const moduleViewer = (item: any): CourseViewerItem | null => {
+    if (item.type === 'File') {
+      const linked = courseFiles.find((file) => String(file.id) === String(item.contentId));
+      return linked ? fileViewer(linked) : item.htmlUrl ? { title: item.title, canvasUrl: item.htmlUrl, url: item.htmlUrl } : null;
+    }
+    if (item.type === 'Page') {
+      const page = coursePages.find((row) => row.url === item.pageUrl || String(row.id) === String(item.contentId));
+      return page ? pageViewer(page) : item.htmlUrl ? { title: item.title, canvasUrl: item.htmlUrl, url: item.htmlUrl } : null;
+    }
+    if (item.type === 'Assignment') {
+      const assignment = courseAssignments.find((row) => String(row.id) === String(item.contentId));
+      return assignment ? assignmentViewer(assignment) : item.htmlUrl ? { title: item.title, canvasUrl: item.htmlUrl, url: item.htmlUrl } : null;
+    }
+    return item.htmlUrl ? { title: item.title, canvasUrl: item.htmlUrl, url: item.htmlUrl } : null;
+  };
 
   const toggleModule = (moduleId: string) =>
     setOpenModules((current) => {
@@ -232,11 +292,18 @@ export default function CourseDetail() {
         : due.urgency === 'soon'
           ? 'rgba(194,143,56,.13)'
           : colors.accentSoft;
-    const dueColor = complete ? colors.accent : due.urgency === 'danger' ? colors.danger : due.urgency === 'soon' ? '#9A6B18' : colors.accent;
+    const dueColor = complete
+      ? colors.accent
+      : due.urgency === 'danger'
+        ? colors.danger
+        : due.urgency === 'soon'
+          ? '#9A6B18'
+          : colors.accent;
+    const canOpen = !!a.description || !!a.htmlUrl;
     return (
       <Pressable
-        onPress={() => a.htmlUrl && openInside({ title: a.name, url: a.htmlUrl, canvasUrl: a.htmlUrl })}
-        disabled={!a.htmlUrl}
+        onPress={() => canOpen && openInside(assignmentViewer(a))}
+        disabled={!canOpen}
         style={({ hovered, pressed }: any) => [
           s.card,
           { backgroundColor: colors.surface, borderColor: colors.border },
@@ -255,8 +322,12 @@ export default function CourseDetail() {
           </View>
         </View>
         <View style={s.rightMeta}>
-          {a.pointsPossible != null ? <Text style={[s.points, { color: colors.text }]}>{a.pointsPossible} pts</Text> : null}
-          <Text style={[s.status, { color: complete ? colors.accent : colors.muted }]}>{complete ? 'Completed' : due.urgency === 'danger' ? 'Needs attention' : 'Upcoming'}</Text>
+          {a.pointsPossible != null ? (
+            <Text style={[s.points, { color: colors.text }]}>{a.pointsPossible} pts</Text>
+          ) : null}
+          <Text style={[s.status, { color: complete ? colors.accent : colors.muted }]}>
+            {complete ? 'Completed' : due.urgency === 'danger' ? 'Needs attention' : 'Upcoming'}
+          </Text>
         </View>
       </Pressable>
     );
@@ -266,92 +337,129 @@ export default function CourseDetail() {
     <>
       {viewer ? <CourseAssetViewer item={viewer} onClose={() => setViewer(null)} /> : null}
 
-      {!viewer ? (
+      {!viewer && tab === 'overview' ? (
         <>
-          {tab === 'overview' ? (
-            <>
-              <View style={s.sectionHead}>
-                <Text style={[s.section, { color: colors.text }]}>Upcoming assignments</Text>
-                <Text style={[s.count, { color: colors.muted }]}>{upcoming.length}</Text>
+          <View style={s.sectionHead}>
+            <Text style={[s.section, { color: colors.text }]}>Upcoming assignments</Text>
+            <Text style={[s.count, { color: colors.muted }]}>{upcoming.length}</Text>
+          </View>
+          {upcoming.length ? (
+            upcoming.slice(0, 8).map((a) => <AssignmentCard key={String(a.id)} a={a} />)
+          ) : (
+            <Empty>No upcoming assignments — you’re caught up.</Empty>
+          )}
+
+          <View style={s.overviewGrid}>
+            <Pressable onPress={() => setTab('announcements')} style={[s.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+              <Megaphone size={18} color={colors.accent} />
+              <Text style={[s.summaryTitle, { color: colors.text }]}>Announcements</Text>
+              <Text style={[s.summaryNumber, { color: colors.text }]}>{courseAnnouncements.length}</Text>
+              <Text style={[s.meta, { color: colors.muted }]}>Course updates from Canvas</Text>
+            </Pressable>
+            <Pressable onPress={() => setTab('modules')} style={[s.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+              <Layers3 size={18} color={colors.accent} />
+              <Text style={[s.summaryTitle, { color: colors.text }]}>Modules</Text>
+              <Text style={[s.summaryNumber, { color: colors.text }]}>{courseModules.length}</Text>
+              <Text style={[s.meta, { color: colors.muted }]}>Expandable course material</Text>
+            </Pressable>
+            <Pressable onPress={() => setTab('files')} style={[s.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+              <FolderOpen size={18} color={colors.accent} />
+              <Text style={[s.summaryTitle, { color: colors.text }]}>Files</Text>
+              <Text style={[s.summaryNumber, { color: colors.text }]}>{courseFiles.length}</Text>
+              <Text style={[s.meta, { color: colors.muted }]}>Open inside Acadence</Text>
+            </Pressable>
+          </View>
+
+          {plainText(course.syllabusBody) ? (
+            <Pressable
+              onPress={() => setTab('syllabus')}
+              style={[s.syllabusPreview, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            >
+              <View style={[s.contentIcon, { backgroundColor: colors.accentSoft }]}>
+                <FileText size={16} color={colors.accent} />
               </View>
-              {upcoming.length ? upcoming.slice(0, 8).map((a) => <AssignmentCard key={String(a.id)} a={a} />) : <Empty>No upcoming assignments — you’re caught up.</Empty>}
-
-              <View style={s.overviewGrid}>
-                <View style={[s.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
-                  <Megaphone size={18} color={colors.accent} />
-                  <Text style={[s.summaryTitle, { color: colors.text }]}>Announcements</Text>
-                  <Text style={[s.summaryNumber, { color: colors.text }]}>{courseAnnouncements.length}</Text>
-                  <Text style={[s.meta, { color: colors.muted }]}>Course updates from Canvas</Text>
-                </View>
-                <View style={[s.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
-                  <Layers3 size={18} color={colors.accent} />
-                  <Text style={[s.summaryTitle, { color: colors.text }]}>Modules</Text>
-                  <Text style={[s.summaryNumber, { color: colors.text }]}>{courseModules.length}</Text>
-                  <Text style={[s.meta, { color: colors.muted }]}>Expandable course material</Text>
-                </View>
-                <View style={[s.summaryCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
-                  <FolderOpen size={18} color={colors.accent} />
-                  <Text style={[s.summaryTitle, { color: colors.text }]}>Files</Text>
-                  <Text style={[s.summaryNumber, { color: colors.text }]}>{courseFiles.length}</Text>
-                  <Text style={[s.meta, { color: colors.muted }]}>Open inside Acadence</Text>
-                </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.summaryTitle, { color: colors.text }]}>Syllabus</Text>
+                <Text numberOfLines={2} style={[s.body, { color: colors.muted }]}>
+                  {plainText(course.syllabusBody)}
+                </Text>
               </View>
-
-              {plainText(course.syllabusBody) ? (
-                <Pressable onPress={() => setTab('syllabus')} style={[s.syllabusPreview, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
-                  <View style={[s.contentIcon, { backgroundColor: colors.accentSoft }]}><FileText size={16} color={colors.accent} /></View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[s.summaryTitle, { color: colors.text }]}>Syllabus</Text>
-                    <Text numberOfLines={2} style={[s.body, { color: colors.muted }]}>{plainText(course.syllabusBody)}</Text>
-                  </View>
-                  <ChevronRight size={17} color={colors.muted} />
-                </Pressable>
-              ) : null}
-            </>
+              <ChevronRight size={17} color={colors.muted} />
+            </Pressable>
           ) : null}
+        </>
+      ) : null}
 
-          {tab === 'syllabus' ? (
-            <>
-              <View style={s.sectionHead}><Text style={[s.section, { color: colors.text }]}>Syllabus</Text></View>
-              {plainText(course.syllabusBody) ? (
-                <View style={[s.syllabus, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
-                  <Text selectable style={[s.syllabusText, { color: colors.text }]}>{plainText(course.syllabusBody)}</Text>
-                </View>
-              ) : <Empty>No syllabus text was provided by Canvas for this course.</Empty>}
-            </>
-          ) : null}
+      {!viewer && tab === 'syllabus' ? (
+        <>
+          <View style={s.sectionHead}>
+            <Text style={[s.section, { color: colors.text }]}>Syllabus</Text>
+          </View>
+          {course.syllabusBody ? (
+            <View style={[s.syllabus, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+              <CanvasRichContent html={course.syllabusBody} baseUrl={baseUrl} minHeight={520} />
+            </View>
+          ) : (
+            <Empty>No syllabus was provided by Canvas for this course.</Empty>
+          )}
+        </>
+      ) : null}
 
-          {tab === 'modules' ? (
-            <>
-              <View style={s.sectionHead}><Text style={[s.section, { color: colors.text }]}>Modules</Text><Text style={[s.count, { color: colors.muted }]}>{courseModules.length}</Text></View>
-              {courseModules.length ? courseModules.map((module) => {
-                const open = openModules.has(String(module.id));
-                return (
-                  <Animated.View key={module.id} layout={Layout.springify().damping(22).stiffness(280)} style={[s.moduleCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
-                    <Pressable
-                      onPress={() => toggleModule(String(module.id))}
-                      style={({ hovered }: any) => [s.moduleHead, hovered && { backgroundColor: colors.accentSoft }]}
-                    >
-                      <View style={[s.moduleIcon, { backgroundColor: colors.accentSoft }]}><Layers3 size={17} color={colors.accent} /></View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[s.moduleTitle, { color: colors.text }]}>{module.name}</Text>
-                        <Text style={[s.meta, { color: colors.muted }]}>{module.items?.length || 0} item{module.items?.length === 1 ? '' : 's'}{module.unlockAt ? ` · unlocks ${new Date(module.unlockAt).toLocaleString()}` : ''}</Text>
-                      </View>
-                      {open ? <ChevronDown size={18} color={colors.muted} /> : <ChevronRight size={18} color={colors.muted} />}
-                    </Pressable>
+      {!viewer && tab === 'modules' ? (
+        <>
+          <View style={s.sectionHead}>
+            <Text style={[s.section, { color: colors.text }]}>Modules</Text>
+            <Text style={[s.count, { color: colors.muted }]}>{courseModules.length}</Text>
+          </View>
+          {courseModules.length ? (
+            courseModules.map((module) => {
+              const open = openModules.has(String(module.id));
+              return (
+                <Animated.View
+                  key={module.id}
+                  layout={Layout.springify().damping(22).stiffness(280)}
+                  style={[s.moduleCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                >
+                  <Pressable
+                    onPress={() => toggleModule(String(module.id))}
+                    style={({ hovered }: any) => [
+                      s.moduleHead,
+                      hovered && { backgroundColor: colors.accentSoft },
+                    ]}
+                  >
+                    <View style={[s.moduleIcon, { backgroundColor: colors.accentSoft }]}>
+                      <Layers3 size={17} color={colors.accent} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.moduleTitle, { color: colors.text }]}>{module.name}</Text>
+                      <Text style={[s.meta, { color: colors.muted }]}>
+                        {module.items?.length || 0} item{module.items?.length === 1 ? '' : 's'}
+                        {module.unlockAt ? ` · unlocks ${new Date(module.unlockAt).toLocaleString()}` : ''}
+                      </Text>
+                    </View>
                     {open ? (
-                      <Animated.View layout={Layout.springify()}>
-                        {(module.items || []).sort((a, b) => (a.position || 0) - (b.position || 0)).map((item) => {
-                          const linkedFile = item.type === 'File' ? courseFiles.find((file) => String(file.id) === String(item.contentId)) : undefined;
+                      <ChevronDown size={18} color={colors.muted} />
+                    ) : (
+                      <ChevronRight size={18} color={colors.muted} />
+                    )}
+                  </Pressable>
+                  {open ? (
+                    <Animated.View layout={Layout.springify()}>
+                      {(module.items || [])
+                        .slice()
+                        .sort((a, b) => (a.position || 0) - (b.position || 0))
+                        .map((item) => {
+                          const target = moduleViewer(item);
                           return (
                             <Pressable
                               key={item.id}
-                              onPress={() => {
-                                if (linkedFile) openInside(fileViewer(linkedFile));
-                                else if (item.htmlUrl) openInside({ title: item.title, url: item.htmlUrl, canvasUrl: item.htmlUrl });
-                              }}
-                              disabled={!linkedFile && !item.htmlUrl}
-                              style={({ hovered }: any) => [s.moduleItem, { borderTopColor: colors.border }, hovered && { backgroundColor: colors.accentSoft }]}
+                              onPress={() => target && openInside(target)}
+                              disabled={!target}
+                              style={({ hovered }: any) => [
+                                s.moduleItem,
+                                { borderTopColor: colors.border },
+                                hovered && { backgroundColor: colors.accentSoft },
+                              ]}
                             >
                               <FileText size={15} color={colors.muted} />
                               <View style={{ flex: 1 }}>
@@ -362,130 +470,271 @@ export default function CourseDetail() {
                             </Pressable>
                           );
                         })}
-                      </Animated.View>
+                    </Animated.View>
+                  ) : null}
+                </Animated.View>
+              );
+            })
+          ) : (
+            <Empty>Modules haven’t synced yet. Reload the Acadence extension and sync Canvas once.</Empty>
+          )}
+        </>
+      ) : null}
+
+      {!viewer && tab === 'assignments' ? (
+        <>
+          <View style={s.sectionHead}>
+            <Text style={[s.section, { color: colors.text }]}>Upcoming</Text>
+            <Text style={[s.count, { color: colors.muted }]}>{upcoming.length}</Text>
+          </View>
+          {upcoming.length ? upcoming.map((a) => <AssignmentCard key={String(a.id)} a={a} />) : <Empty>No upcoming assignments.</Empty>}
+
+          <View style={[s.sectionHead, { marginTop: 26 }]}>
+            <Text style={[s.section, { color: colors.text }]}>Completed</Text>
+            <Text style={[s.count, { color: colors.muted }]}>{completedAssignments.length}</Text>
+          </View>
+          {completedAssignments.length ? (
+            completedAssignments.map((a) => <AssignmentCard key={String(a.id)} a={a} />)
+          ) : (
+            <Empty>No completed assignments yet.</Empty>
+          )}
+
+          {otherAssignments.length ? (
+            <>
+              <View style={[s.sectionHead, { marginTop: 26 }]}>
+                <Text style={[s.section, { color: colors.text }]}>Needs attention</Text>
+                <Text style={[s.count, { color: colors.muted }]}>{otherAssignments.length}</Text>
+              </View>
+              {otherAssignments.map((a) => <AssignmentCard key={String(a.id)} a={a} />)}
+            </>
+          ) : null}
+        </>
+      ) : null}
+
+      {!viewer && tab === 'announcements' ? (
+        <>
+          <View style={s.sectionHead}>
+            <Text style={[s.section, { color: colors.text }]}>Announcements</Text>
+            <Text style={[s.count, { color: colors.muted }]}>{courseAnnouncements.length}</Text>
+          </View>
+          {courseAnnouncements.length ? (
+            courseAnnouncements.map((a) => (
+              <Pressable
+                key={a.id}
+                onPress={() => openInside(announcementViewer(a))}
+                style={[s.contentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              >
+                <View style={[s.contentIcon, { backgroundColor: colors.accentSoft }]}>
+                  <Megaphone size={16} color={colors.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.itemTitle, { color: colors.text }]}>{a.title}</Text>
+                  <Text numberOfLines={3} style={[s.body, { color: colors.muted }]}>
+                    {plainText(a.message)}
+                  </Text>
+                  <Text style={[s.meta, { color: colors.muted }]}>
+                    {a.author ? `${a.author} · ` : ''}
+                    {a.postedAt ? new Date(a.postedAt).toLocaleString() : ''}
+                  </Text>
+                </View>
+              </Pressable>
+            ))
+          ) : (
+            <Empty>No announcements found for this course.</Empty>
+          )}
+        </>
+      ) : null}
+
+      {!viewer && tab === 'grades' ? (
+        <>
+          <View style={s.gradeHeroRow}>
+            <View style={[s.gradeSummary, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+              <Text style={[s.gradeEyebrow, { color: colors.muted }]}>CURRENT COURSE GRADE</Text>
+              <View style={s.gradeScoreRow}>
+                <Text style={[s.gradeBig, { color: colors.text }]}>
+                  {currentScore != null ? `${Math.round(currentScore * 10) / 10}%` : '—'}
+                </Text>
+                {currentLetter ? (
+                  <View style={[s.letterPill, { backgroundColor: colors.accentSoft }]}>
+                    <Text style={[s.letterPillText, { color: colors.accent }]}>{currentLetter}</Text>
+                  </View>
+                ) : null}
+              </View>
+              <Text style={[s.meta, { color: colors.muted }]}>
+                {weights.length
+                  ? `${weights[0].source === 'canvas' ? 'Canvas' : 'Syllabus'} weighted grading`
+                  : 'Points-based grading'}
+                {inferredLetter.estimated && !course.currentGrade ? ' · letter estimated' : ''}
+              </Text>
+            </View>
+            <View style={[s.gradeSummary, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+              <Text style={[s.gradeEyebrow, { color: colors.muted }]}>GRADED ITEMS</Text>
+              <Text style={[s.gradeBig, { color: colors.text }]}>{courseGrades.length}</Text>
+              <Text style={[s.meta, { color: colors.muted }]}>Synced from Canvas</Text>
+              <Pressable
+                onPress={() => router.push('/(tabs)/grades')}
+                style={[s.whatIfButton, { backgroundColor: colors.accentSoft }]}
+              >
+                <Calculator size={14} color={colors.accent} />
+                <Text style={[s.whatIfText, { color: colors.accent }]}>Open What-If</Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <View style={[s.weightsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
+            <View style={s.sectionHead}>
+              <Text style={[s.section, { color: colors.text }]}>Grade weights</Text>
+              <Text style={[s.count, { color: colors.muted }]}>
+                {weights.length ? `${Math.round(weights.reduce((n, w) => n + w.weight, 0))}%` : 'Points'}
+              </Text>
+            </View>
+            {weights.length ? (
+              weights.map((weight) => (
+                <View key={weight.id} style={s.weightRow}>
+                  <Text style={[s.weightName, { color: colors.text }]}>{weight.name}</Text>
+                  <View style={[s.weightTrack, { backgroundColor: colors.accentSoft }]}>
+                    <View
+                      style={[
+                        s.weightFill,
+                        {
+                          width: `${Math.min(100, weight.weight)}%`,
+                          backgroundColor: colors.accent,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={[s.weightValue, { color: colors.text }]}>{weight.weight}%</Text>
+                </View>
+              ))
+            ) : (
+              <Text style={[s.body, { color: colors.muted }]}>
+                This course currently uses points earned ÷ points possible because Canvas and the syllabus did not expose a complete weight table.
+              </Text>
+            )}
+          </View>
+
+          <View style={[s.sectionHead, { marginTop: 24 }]}>
+            <Text style={[s.section, { color: colors.text }]}>Grade history</Text>
+            <Text style={[s.count, { color: colors.muted }]}>{courseGrades.length}</Text>
+          </View>
+          {courseGrades.length ? (
+            courseGrades.map((g) => {
+              const pct =
+                g.score != null && g.pointsPossible
+                  ? (Number(g.score) / Number(g.pointsPossible)) * 100
+                  : null;
+              const assignment = courseAssignments.find(
+                (row) => String(row.id) === String(g.assignmentId),
+              );
+              return (
+                <Pressable
+                  key={g.id}
+                  onPress={() =>
+                    assignment
+                      ? openInside(assignmentViewer(assignment))
+                      : g.htmlUrl && openInside({ title: g.name, canvasUrl: g.htmlUrl, url: g.htmlUrl })
+                  }
+                  style={[s.contentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                >
+                  <View style={[s.contentIcon, { backgroundColor: colors.accentSoft }]}>
+                    <GraduationCap size={16} color={colors.accent} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.itemTitle, { color: colors.text }]}>{g.name}</Text>
+                    <Text style={[s.meta, { color: colors.muted }]}>
+                      {g.gradedAt ? `Graded ${new Date(g.gradedAt).toLocaleString()}` : 'Graded'}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <Text style={[s.gradeValue, { color: colors.text }]}>
+                      {g.excused
+                        ? 'Excused'
+                        : g.score != null
+                          ? `${g.score}${g.pointsPossible != null ? ` / ${g.pointsPossible}` : ''}`
+                          : g.grade || '—'}
+                    </Text>
+                    {g.grade ? <Text style={[s.meta, { color: colors.accent }]}>{g.grade}</Text> : null}
+                    {pct != null ? (
+                      <Text style={[s.meta, { color: colors.muted }]}>{Math.round(pct)}%</Text>
                     ) : null}
-                  </Animated.View>
-                );
-              }) : <Empty>Modules haven’t synced yet. Reload the Acadence extension and sync Canvas once.</Empty>}
-            </>
-          ) : null}
-
-          {tab === 'assignments' ? (
-            <>
-              <View style={s.sectionHead}><Text style={[s.section, { color: colors.text }]}>Upcoming</Text><Text style={[s.count, { color: colors.muted }]}>{upcoming.length}</Text></View>
-              {upcoming.length ? upcoming.map((a) => <AssignmentCard key={String(a.id)} a={a} />) : <Empty>No upcoming assignments.</Empty>}
-
-              <View style={[s.sectionHead, { marginTop: 26 }]}><Text style={[s.section, { color: colors.text }]}>Completed</Text><Text style={[s.count, { color: colors.muted }]}>{completedAssignments.length}</Text></View>
-              {completedAssignments.length ? completedAssignments.map((a) => <AssignmentCard key={String(a.id)} a={a} />) : <Empty>No completed assignments yet.</Empty>}
-
-              {otherAssignments.length ? (
-                <>
-                  <View style={[s.sectionHead, { marginTop: 26 }]}><Text style={[s.section, { color: colors.text }]}>Needs attention</Text><Text style={[s.count, { color: colors.muted }]}>{otherAssignments.length}</Text></View>
-                  {otherAssignments.map((a) => <AssignmentCard key={String(a.id)} a={a} />)}
-                </>
-              ) : null}
-            </>
-          ) : null}
-
-          {tab === 'announcements' ? (
-            <>
-              <View style={s.sectionHead}><Text style={[s.section, { color: colors.text }]}>Announcements</Text><Text style={[s.count, { color: colors.muted }]}>{courseAnnouncements.length}</Text></View>
-              {courseAnnouncements.length ? courseAnnouncements.map((a) => (
-                <Pressable
-                  key={a.id}
-                  onPress={() => a.htmlUrl && openInside({ title: a.title, url: a.htmlUrl, canvasUrl: a.htmlUrl })}
-                  disabled={!a.htmlUrl}
-                  style={[s.contentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                >
-                  <View style={[s.contentIcon, { backgroundColor: colors.accentSoft }]}><Megaphone size={16} color={colors.accent} /></View>
-                  <View style={{ flex: 1 }}><Text style={[s.itemTitle, { color: colors.text }]}>{a.title}</Text><Text numberOfLines={3} style={[s.body, { color: colors.muted }]}>{plainText(a.message)}</Text><Text style={[s.meta, { color: colors.muted }]}>{a.author ? `${a.author} · ` : ''}{a.postedAt ? new Date(a.postedAt).toLocaleString() : ''}</Text></View>
-                </Pressable>
-              )) : <Empty>No announcements found for this course.</Empty>}
-            </>
-          ) : null}
-
-          {tab === 'grades' ? (
-            <>
-              <View style={s.gradeHeroRow}>
-                <View style={[s.gradeSummary, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
-                  <Text style={[s.gradeEyebrow, { color: colors.muted }]}>CURRENT COURSE GRADE</Text>
-                  <View style={s.gradeScoreRow}>
-                    <Text style={[s.gradeBig, { color: colors.text }]}>{currentScore != null ? `${Math.round(currentScore * 10) / 10}%` : '—'}</Text>
-                    {currentLetter ? <View style={[s.letterPill, { backgroundColor: colors.accentSoft }]}><Text style={[s.letterPillText, { color: colors.accent }]}>{currentLetter}</Text></View> : null}
                   </View>
-                  <Text style={[s.meta, { color: colors.muted }]}>{weights.length ? `${weights[0].source === 'canvas' ? 'Canvas' : 'Syllabus'} weighted grading` : 'Points-based grading'}{inferredLetter.estimated && !course.currentGrade ? ' · letter estimated' : ''}</Text>
-                </View>
-                <View style={[s.gradeSummary, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
-                  <Text style={[s.gradeEyebrow, { color: colors.muted }]}>GRADED ITEMS</Text>
-                  <Text style={[s.gradeBig, { color: colors.text }]}>{courseGrades.length}</Text>
-                  <Text style={[s.meta, { color: colors.muted }]}>Synced from Canvas</Text>
-                </View>
-              </View>
-
-              <View style={[s.weightsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
-                <View style={s.sectionHead}><Text style={[s.section, { color: colors.text }]}>Grade weights</Text><Text style={[s.count, { color: colors.muted }]}>{weights.length ? `${Math.round(weights.reduce((n, w) => n + w.weight, 0))}%` : 'Points'}</Text></View>
-                {weights.length ? weights.map((weight) => (
-                  <View key={weight.id} style={s.weightRow}>
-                    <Text style={[s.weightName, { color: colors.text }]}>{weight.name}</Text>
-                    <View style={[s.weightTrack, { backgroundColor: colors.accentSoft }]}><View style={[s.weightFill, { width: `${Math.min(100, weight.weight)}%`, backgroundColor: colors.accent }]} /></View>
-                    <Text style={[s.weightValue, { color: colors.text }]}>{weight.weight}%</Text>
-                  </View>
-                )) : <Text style={[s.body, { color: colors.muted }]}>This course currently uses points earned ÷ points possible because Canvas and the syllabus did not expose a complete weight table.</Text>}
-              </View>
-
-              <View style={[s.sectionHead, { marginTop: 24 }]}><Text style={[s.section, { color: colors.text }]}>Grade history</Text><Text style={[s.count, { color: colors.muted }]}>{courseGrades.length}</Text></View>
-              {courseGrades.length ? courseGrades.map((g) => {
-                const pct = g.score != null && g.pointsPossible ? (Number(g.score) / Number(g.pointsPossible)) * 100 : null;
-                return (
-                  <Pressable
-                    key={g.id}
-                    onPress={() => g.htmlUrl && openInside({ title: g.name, url: g.htmlUrl, canvasUrl: g.htmlUrl })}
-                    disabled={!g.htmlUrl}
-                    style={[s.contentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                  >
-                    <View style={[s.contentIcon, { backgroundColor: colors.accentSoft }]}><GraduationCap size={16} color={colors.accent} /></View>
-                    <View style={{ flex: 1 }}><Text style={[s.itemTitle, { color: colors.text }]}>{g.name}</Text><Text style={[s.meta, { color: colors.muted }]}>{g.gradedAt ? `Graded ${new Date(g.gradedAt).toLocaleString()}` : 'Graded'}</Text></View>
-                    <View style={{ alignItems: 'flex-end' }}><Text style={[s.gradeValue, { color: colors.text }]}>{g.excused ? 'Excused' : g.score != null ? `${g.score}${g.pointsPossible != null ? ` / ${g.pointsPossible}` : ''}` : g.grade || '—'}</Text>{pct != null ? <Text style={[s.meta, { color: colors.accent }]}>{Math.round(pct)}%</Text> : null}</View>
-                  </Pressable>
-                );
-              }) : <Empty>No grades have been synced for this course yet.</Empty>}
-            </>
-          ) : null}
-
-          {tab === 'files' ? (
-            <>
-              <View style={s.sectionHead}><Text style={[s.section, { color: colors.text }]}>Files</Text><Text style={[s.count, { color: colors.muted }]}>{courseFiles.length}</Text></View>
-              {courseFiles.length ? courseFiles.map((file: any) => (
-                <Pressable
-                  key={file.id}
-                  onPress={() => openInside(fileViewer(file))}
-                  style={({ hovered }: any) => [s.contentCard, { backgroundColor: colors.surface, borderColor: colors.border }, hovered && { transform: [{ translateY: -1 }] }]}
-                >
-                  <View style={[s.contentIcon, { backgroundColor: colors.accentSoft }]}><File size={16} color={colors.accent} /></View>
-                  <View style={{ flex: 1 }}><Text style={[s.itemTitle, { color: colors.text }]}>{file.displayName}</Text><Text style={[s.meta, { color: colors.muted }]}>{[file.contentType, formatFileSize(file.size), file.updatedAt ? `Updated ${new Date(file.updatedAt).toLocaleDateString()}` : ''].filter(Boolean).join(' · ')}</Text></View>
-                  <View style={[s.openChip, { backgroundColor: colors.accentSoft }]}><Text style={[s.openChipText, { color: colors.accent }]}>Open here</Text></View>
                 </Pressable>
-              )) : <Empty>No files found for this course.</Empty>}
-            </>
-          ) : null}
+              );
+            })
+          ) : (
+            <Empty>No grades have been synced for this course yet.</Empty>
+          )}
+        </>
+      ) : null}
 
-          {tab === 'pages' ? (
-            <>
-              <View style={s.sectionHead}><Text style={[s.section, { color: colors.text }]}>Pages</Text><Text style={[s.count, { color: colors.muted }]}>{coursePages.length}</Text></View>
-              {coursePages.length ? coursePages.map((page) => (
-                <Pressable
-                  key={page.id}
-                  onPress={() => page.htmlUrl && openInside({ title: page.title, url: page.htmlUrl, canvasUrl: page.htmlUrl })}
-                  disabled={!page.htmlUrl}
-                  style={[s.contentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-                >
-                  <View style={[s.contentIcon, { backgroundColor: colors.accentSoft }]}><FileText size={16} color={colors.accent} /></View>
-                  <View style={{ flex: 1 }}><Text style={[s.itemTitle, { color: colors.text }]}>{page.title}</Text><Text style={[s.meta, { color: colors.muted }]}>{page.frontPage ? 'Front page' : 'Canvas page'}{page.updatedAt ? ` · Updated ${new Date(page.updatedAt).toLocaleDateString()}` : ''}</Text></View>
-                  <ChevronRight size={16} color={colors.muted} />
-                </Pressable>
-              )) : <Empty>No pages found for this course.</Empty>}
-            </>
-          ) : null}
+      {!viewer && tab === 'files' ? (
+        <>
+          <View style={s.sectionHead}>
+            <Text style={[s.section, { color: colors.text }]}>Files</Text>
+            <Text style={[s.count, { color: colors.muted }]}>{courseFiles.length}</Text>
+          </View>
+          {courseFiles.length ? (
+            courseFiles.map((file: any) => (
+              <Pressable
+                key={file.id}
+                onPress={() => openInside(fileViewer(file))}
+                style={({ hovered }: any) => [
+                  s.contentCard,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  hovered && { transform: [{ translateY: -1 }] },
+                ]}
+              >
+                <View style={[s.contentIcon, { backgroundColor: colors.accentSoft }]}>
+                  <File size={16} color={colors.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.itemTitle, { color: colors.text }]}>{file.displayName}</Text>
+                  <Text style={[s.meta, { color: colors.muted }]}>
+                    {[file.contentType, formatFileSize(file.size), file.updatedAt ? `Updated ${new Date(file.updatedAt).toLocaleDateString()}` : '']
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Text>
+                </View>
+                <View style={[s.openChip, { backgroundColor: colors.accentSoft }]}>
+                  <Text style={[s.openChipText, { color: colors.accent }]}>Open here</Text>
+                </View>
+              </Pressable>
+            ))
+          ) : (
+            <Empty>No files found for this course.</Empty>
+          )}
+        </>
+      ) : null}
+
+      {!viewer && tab === 'pages' ? (
+        <>
+          <View style={s.sectionHead}>
+            <Text style={[s.section, { color: colors.text }]}>Pages</Text>
+            <Text style={[s.count, { color: colors.muted }]}>{coursePages.length}</Text>
+          </View>
+          {coursePages.length ? (
+            coursePages.map((page) => (
+              <Pressable
+                key={page.id}
+                onPress={() => openInside(pageViewer(page))}
+                style={[s.contentCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              >
+                <View style={[s.contentIcon, { backgroundColor: colors.accentSoft }]}>
+                  <FileText size={16} color={colors.accent} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.itemTitle, { color: colors.text }]}>{page.title}</Text>
+                  <Text style={[s.meta, { color: colors.muted }]}>
+                    {page.frontPage ? 'Front page' : 'Canvas page'}
+                    {page.updatedAt ? ` · updated ${new Date(page.updatedAt).toLocaleDateString()}` : ''}
+                  </Text>
+                </View>
+                <ChevronRight size={16} color={colors.muted} />
+              </Pressable>
+            ))
+          ) : (
+            <Empty>No pages found for this course.</Empty>
+          )}
         </>
       ) : null}
     </>
@@ -499,7 +748,11 @@ export default function CourseDetail() {
       </Pressable>
 
       <View style={s.hero}>
-        <img src={image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        <img
+          src={image}
+          alt=""
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+        />
         <View style={s.shade} />
         <View style={s.heroText}>
           <Text style={s.heroCode}>{course.courseCode || 'CANVAS COURSE'}</Text>
@@ -507,7 +760,11 @@ export default function CourseDetail() {
           <View style={s.heroBottom}>
             <Text style={s.heroSub}>Your Canvas course, organized in Acadence</Text>
             {currentScore != null ? (
-              <View style={s.grade}><Text style={s.gradeText}>{Math.round(currentScore * 10) / 10}%{currentLetter ? ` · ${currentLetter}` : ''}</Text></View>
+              <View style={s.grade}>
+                <Text style={s.gradeText}>
+                  {Math.round(currentScore * 10) / 10}%{currentLetter ? ` · ${currentLetter}` : ''}
+                </Text>
+              </View>
             ) : null}
           </View>
         </View>
@@ -515,33 +772,72 @@ export default function CourseDetail() {
 
       {desktop ? (
         <View style={s.courseShell}>
-          <View style={[s.courseRail, courseNavCollapsed && s.courseRailCollapsed, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
-            <View style={s.courseRailHead}>
-              {!courseNavCollapsed ? <Text style={[s.railTitle, { color: colors.text }]}>Course menu</Text> : null}
+          <View
+            style={[
+              s.courseRail,
+              courseNavCollapsed && s.courseRailCollapsed,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+            ]}
+          >
+            <View style={[s.courseRailHead, courseNavCollapsed && s.courseRailHeadCollapsed]}>
+              {!courseNavCollapsed ? (
+                <Text style={[s.railTitle, { color: colors.text }]}>Course</Text>
+              ) : null}
               <Pressable
-                accessibilityLabel={courseNavCollapsed ? 'Expand course navigation' : 'Collapse course navigation'}
+                accessibilityLabel={
+                  courseNavCollapsed ? 'Expand course navigation' : 'Collapse course navigation'
+                }
                 onPress={() => setCourseNavCollapsed((value) => !value)}
-                style={[s.railCollapse, { borderColor: colors.border, backgroundColor: colors.background }]}
+                style={({ hovered, pressed }: any) => [
+                  s.railCollapse,
+                  { borderColor: colors.border, backgroundColor: colors.background },
+                  hovered && { transform: [{ scale: 1.05 }] },
+                  pressed && { transform: [{ scale: 0.95 }] },
+                ]}
               >
-                {courseNavCollapsed ? <ChevronRight size={15} color={colors.muted} /> : <ChevronLeft size={15} color={colors.muted} />}
+                {courseNavCollapsed ? (
+                  <ChevronRight size={15} color={colors.muted} />
+                ) : (
+                  <ChevronLeft size={15} color={colors.muted} />
+                )}
               </Pressable>
             </View>
             <View style={s.railItems}>
               {TABS.map(([key, label, Icon]) => {
                 const active = tab === key && !viewer;
                 return (
-                  <div key={key} title={courseNavCollapsed ? label : undefined} style={{ width: '100%' }}>
+                  <div
+                    key={key}
+                    title={courseNavCollapsed ? label : undefined}
+                    style={{ width: '100%' }}
+                  >
                     <Pressable
-                      onPress={() => { setTab(key); setViewer(null); }}
-                      style={({ hovered }: any) => [
+                      onPress={() => {
+                        setTab(key);
+                        setViewer(null);
+                      }}
+                      style={({ hovered, pressed }: any) => [
                         s.railItem,
                         courseNavCollapsed && s.railItemCollapsed,
-                        { backgroundColor: active ? colors.accentSoft : 'transparent' },
+                        {
+                          backgroundColor: active ? colors.accentSoft : 'transparent',
+                          borderColor: active ? colors.accentSoft : 'transparent',
+                        },
                         hovered && !active && { backgroundColor: colors.background },
+                        pressed && { transform: [{ scale: 0.98 }] },
                       ]}
                     >
-                      <Icon size={17} color={active ? colors.accent : colors.muted} />
-                      {!courseNavCollapsed ? <Text style={[s.railLabel, { color: active ? colors.accent : colors.text }]}>{label}</Text> : null}
+                      <Icon size={18} color={active ? colors.accent : colors.muted} />
+                      {!courseNavCollapsed ? (
+                        <Text
+                          style={[
+                            s.railLabel,
+                            { color: active ? colors.accent : colors.text },
+                          ]}
+                        >
+                          {label}
+                        </Text>
+                      ) : null}
                     </Pressable>
                   </div>
                 );
@@ -556,9 +852,24 @@ export default function CourseDetail() {
             {TABS.map(([key, label, Icon]) => {
               const active = tab === key && !viewer;
               return (
-                <Pressable key={key} onPress={() => { setTab(key); setViewer(null); }} style={[s.tab, { backgroundColor: active ? colors.accentSoft : colors.surface, borderColor: active ? colors.accentSoft : colors.border }]}>
+                <Pressable
+                  key={key}
+                  onPress={() => {
+                    setTab(key);
+                    setViewer(null);
+                  }}
+                  style={[
+                    s.tab,
+                    {
+                      backgroundColor: active ? colors.accentSoft : colors.surface,
+                      borderColor: active ? colors.accentSoft : colors.border,
+                    },
+                  ]}
+                >
                   <Icon size={15} color={active ? colors.accent : colors.muted} />
-                  <Text style={[s.tabText, { color: active ? colors.accent : colors.muted }]}>{label}</Text>
+                  <Text style={[s.tabText, { color: active ? colors.accent : colors.muted }]}>
+                    {label}
+                  </Text>
                 </Pressable>
               );
             })}
@@ -571,38 +882,118 @@ export default function CourseDetail() {
 }
 
 const s = StyleSheet.create({
-  back: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 14, marginBottom: 16, alignSelf: 'flex-start' },
+  back: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 14,
+    marginBottom: 16,
+    alignSelf: 'flex-start',
+  },
   backText: { fontSize: 13, fontWeight: '800' },
   title: { fontSize: 26, fontWeight: '900' },
-  hero: { height: 220, borderRadius: 20, overflow: 'hidden', position: 'relative', marginBottom: 18 },
+  hero: {
+    height: 220,
+    borderRadius: 20,
+    overflow: 'hidden',
+    position: 'relative',
+    marginBottom: 18,
+  },
   shade: { position: 'absolute', inset: 0, backgroundColor: 'rgba(8,17,13,.38)' },
   heroText: { position: 'absolute', left: 24, right: 24, bottom: 22 },
   heroCode: { color: 'rgba(255,255,255,.76)', fontSize: 11, fontWeight: '900' },
   heroTitle: { color: '#fff', fontSize: 30, fontWeight: '900', marginTop: 5, maxWidth: 780 },
-  heroBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 10 },
+  heroBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 10,
+  },
   heroSub: { color: 'rgba(255,255,255,.78)', fontSize: 12 },
-  grade: { backgroundColor: 'rgba(10,22,16,.72)', borderRadius: 11, paddingHorizontal: 11, paddingVertical: 7 },
+  grade: {
+    backgroundColor: 'rgba(10,22,16,.72)',
+    borderRadius: 11,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+  },
   gradeText: { color: '#fff', fontSize: 13, fontWeight: '900' },
   courseShell: { flexDirection: 'row', alignItems: 'flex-start', gap: 18 },
-  courseRail: { width: 190, borderWidth: 1, borderRadius: 16, padding: 10, position: 'sticky' as any, top: 12 },
-  courseRailCollapsed: { width: 62 },
-  courseRailHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, padding: 4, marginBottom: 8 },
+  courseRail: {
+    width: 198,
+    borderWidth: 1,
+    borderRadius: 17,
+    padding: 9,
+    position: 'sticky' as any,
+    top: 12,
+  },
+  courseRailCollapsed: { width: 58, paddingHorizontal: 6 },
+  courseRailHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 38,
+    gap: 6,
+    paddingHorizontal: 3,
+    marginBottom: 7,
+  },
+  courseRailHeadCollapsed: { justifyContent: 'center', paddingHorizontal: 0 },
   railTitle: { fontSize: 12, fontWeight: '900' },
-  railCollapse: { width: 30, height: 30, borderWidth: 1, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  railCollapse: {
+    width: 30,
+    height: 30,
+    borderWidth: 1,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   railItems: { gap: 4 },
-  railItem: { minHeight: 42, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 10 },
+  railItem: {
+    minHeight: 42,
+    borderRadius: 11,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    paddingHorizontal: 10,
+  },
   railItemCollapsed: { justifyContent: 'center', paddingHorizontal: 0 },
   railLabel: { fontSize: 12, fontWeight: '800' },
   courseContent: { flex: 1, minWidth: 0 },
   tabs: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', marginBottom: 26 },
-  tab: { minHeight: 38, borderRadius: 10, borderWidth: 1, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  tab: {
+    minHeight: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingHorizontal: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   tabText: { fontSize: 12, fontWeight: '800' },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   section: { fontSize: 20, fontWeight: '900' },
   count: { fontSize: 12, fontWeight: '800' },
-  card: { borderWidth: 1, borderRadius: radius.md, padding: 15, marginBottom: 9, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  card: {
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: 15,
+    marginBottom: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   task: { fontSize: 15, fontWeight: '900' },
-  dueChip: { alignSelf: 'flex-start', borderRadius: 11, paddingHorizontal: 9, paddingVertical: 6, marginTop: 9, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  dueChip: {
+    alignSelf: 'flex-start',
+    borderRadius: 11,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    marginTop: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   dueLabel: { fontSize: 11, fontWeight: '900' },
   dueExact: { fontSize: 9, marginTop: 1 },
   rightMeta: { alignItems: 'flex-end', gap: 4 },
@@ -611,29 +1002,83 @@ const s = StyleSheet.create({
   meta: { fontSize: 11, lineHeight: 16 },
   body: { fontSize: 12, lineHeight: 19, marginTop: 5 },
   overviewGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 22 },
-  summaryCard: { flexGrow: 1, flexBasis: 180, minWidth: 170, borderWidth: 1, borderRadius: 15, padding: 14 },
+  summaryCard: {
+    flexGrow: 1,
+    flexBasis: 180,
+    minWidth: 170,
+    borderWidth: 1,
+    borderRadius: 15,
+    padding: 14,
+  },
   summaryTitle: { fontSize: 12, fontWeight: '900', marginTop: 10 },
   summaryNumber: { fontSize: 24, fontWeight: '900', marginTop: 4 },
-  syllabusPreview: { marginTop: 12, borderWidth: 1, borderRadius: 15, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 11 },
-  syllabus: { borderWidth: 1, borderRadius: 18, padding: 22 },
-  syllabusText: { fontSize: 14, lineHeight: 23 },
+  syllabusPreview: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderRadius: 15,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+  },
+  syllabus: { borderWidth: 1, borderRadius: 18, padding: 20, overflow: 'hidden' },
   moduleCard: { borderWidth: 1, borderRadius: 15, marginBottom: 10, overflow: 'hidden' },
-  moduleHead: { minHeight: 66, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  moduleHead: {
+    minHeight: 66,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   moduleIcon: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   moduleTitle: { fontSize: 14, fontWeight: '900' },
-  moduleItem: { minHeight: 54, borderTopWidth: 1, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  moduleItem: {
+    minHeight: 54,
+    borderTopWidth: 1,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   itemTitle: { fontSize: 13, fontWeight: '900' },
-  contentCard: { minHeight: 68, borderWidth: 1, borderRadius: 14, padding: 13, flexDirection: 'row', alignItems: 'center', gap: 11, marginBottom: 8 },
+  contentCard: {
+    minHeight: 68,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+    marginBottom: 8,
+  },
   contentIcon: { width: 36, height: 36, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   openChip: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 6 },
   openChipText: { fontSize: 10, fontWeight: '900' },
   gradeHeroRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  gradeSummary: { flexGrow: 1, flexBasis: 220, minWidth: 200, borderWidth: 1, borderRadius: 16, padding: 17 },
+  gradeSummary: {
+    flexGrow: 1,
+    flexBasis: 220,
+    minWidth: 200,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 17,
+  },
   gradeEyebrow: { fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
   gradeScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 },
   gradeBig: { fontSize: 32, fontWeight: '900' },
   letterPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   letterPillText: { fontSize: 13, fontWeight: '900' },
+  whatIfButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    minHeight: 32,
+    borderRadius: 10,
+    marginTop: 12,
+  },
+  whatIfText: { fontSize: 11, fontWeight: '900' },
   weightsCard: { borderWidth: 1, borderRadius: 16, padding: 16, marginTop: 10 },
   weightRow: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 10 },
   weightName: { width: 130, fontSize: 12, fontWeight: '800' },
