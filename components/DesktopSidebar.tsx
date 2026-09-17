@@ -125,6 +125,9 @@ export function DesktopSidebar() {
   const ProfileIcon = profileItem.icon;
   const profileActive = path.includes('settings');
   const studentName = profile?.name?.trim() || 'You';
+  const brandGradient = focusRunning
+    ? 'linear-gradient(135deg, #D8F2E3 0%, #A7D9BC 48%, #7AB493 100%)'
+    : 'linear-gradient(135deg, #F2FBF5 0%, #D8F0E1 44%, #A8D8BB 100%)';
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
@@ -221,14 +224,16 @@ export function DesktopSidebar() {
             pressed && s.brandDepthPressed,
           ]}
         >
-          <View
-            style={[
-              s.brandPill,
-              {
-                backgroundColor: focusRunning ? '#B7DCC7' : '#D6EEDF',
-              },
-            ]}
-          >
+          <View style={s.brandPill}>
+            <div
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                borderRadius: 999,
+                background: brandGradient,
+              }}
+            />
             <View pointerEvents="none" style={s.brandHighlight} />
             <Text style={s.brand}>acadence</Text>
             <View
@@ -429,6 +434,7 @@ const s = StyleSheet.create({
   },
   brandHighlight: {
     position: 'absolute',
+    zIndex: 2,
     top: 2,
     left: 16,
     right: 16,
@@ -437,12 +443,14 @@ const s = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,.76)',
   },
   brand: {
+    zIndex: 1,
     color: '#163F30',
     fontSize: 22,
     fontWeight: '900',
     letterSpacing: -0.7,
   },
   secretDot: {
+    zIndex: 1,
     width: 8,
     height: 8,
     borderRadius: 999,
