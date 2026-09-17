@@ -37,8 +37,9 @@ test('collector follows pagination and includes real submission/zero grade data'
   assert.deepEqual(data.completeCourseIds.grades, ['10']);
   assert.ok(requests.some(url => url.includes('page=2')));
   const announcements = new URL(requests.find(url => url.includes('/announcements'))!);
-  assert.ok(announcements.searchParams.has('start_date'));
+  assert.equal(announcements.searchParams.get('start_date'), '1970-01-01T00:00:00.000Z');
   assert.ok(announcements.searchParams.has('end_date'));
+  assert.equal(announcements.searchParams.has('active_only'), false);
 });
 test('failed later page discards the partial collection but keeps successful sources', async () => {
   const { data } = await collect(true);

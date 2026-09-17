@@ -15,6 +15,7 @@ import {
 const API = (
   process.env.EXPO_PUBLIC_ACADENCE_API_URL || "http://localhost:8787"
 ).replace(/\/$/, "");
+const READ_BATCH_SIZE = 500;
 type NotificationsValue = {
   notices: ReturnType<typeof visibleNotices>;
   unread: number;
@@ -38,6 +39,7 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
 function ScopedNotifications({ children }: PropsWithChildren) {
   const {
     notificationFeed,
+    allCourses,
     courses,
     connected,
     loading,
@@ -50,9 +52,12 @@ function ScopedNotifications({ children }: PropsWithChildren) {
   const inFlight = useRef(new Set<string>());
   const [error, setError] = useState<string | null>(null);
   const feed = newerFeed(notificationFeed, acknowledged);
+  // Notifications intentionally use every synced Canvas course, not only the
+  // subset selected for Home/Grades, so history is never silently hidden.
+  const notificationCourses = allCourses?.length ? allCourses : courses || [];
   const notices = visibleNotices(
     feed,
-    courses.map((c) => String(c.id)),
+    notificationCourses.map((c) => String(c.id)),
     pending,
   );
   const markIds = async (ids: string[]) => {
@@ -63,25 +68,31 @@ function ScopedNotifications({ children }: PropsWithChildren) {
     targets.forEach((id) => inFlight.current.add(id));
     setPending(new Set(inFlight.current));
     setError(null);
-    const controller = new AbortController(),
-      timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch(`${API}/api/notifications/read`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scope, ids: targets }),
-        signal: controller.signal,
-      });
-      if (!response.ok)
-        throw new Error("Unable to save read status. Please try again.");
-      const next: NotificationFeed = await response.json();
-      if (next.scope !== scope)
-        throw new Error("The Canvas account changed. Refresh notifications.");
-      setAcknowledged((previous) => newerFeed(previous, next));
+      for (let offset = 0; offset < targets.length; offset += READ_BATCH_SIZE) {
+        const chunk = targets.slice(offset, offset + READ_BATCH_SIZE);
+        const controller = new AbortController(),
+          timeout = setTimeout(() => controller.abort(), 15000);
+        try {
+          const response = await fetch(`${API}/api/notifications/read`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ scope, ids: chunk }),
+            signal: controller.signal,
+          });
+          if (!response.ok)
+            throw new Error("Unable to save read status. Please try again.");
+          const next: NotificationFeed = await response.json();
+          if (next.scope !== scope)
+            throw new Error("The Canvas account changed. Refresh notifications.");
+          setAcknowledged((previous) => newerFeed(previous, next));
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
     } catch {
       setError("Read status could not be saved. Please try again.");
     } finally {
-      clearTimeout(timeout);
       targets.forEach((id) => inFlight.current.delete(id));
       setPending(new Set(inFlight.current));
     }
