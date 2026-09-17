@@ -225,7 +225,7 @@ export function DesktopSidebar() {
             style={[
               s.brandPill,
               {
-                backgroundColor: focusRunning ? '#F7D9A4' : '#BDE7CE',
+                backgroundColor: focusRunning ? '#B7DCC7' : '#D6EEDF',
               },
             ]}
           >
@@ -235,7 +235,7 @@ export function DesktopSidebar() {
               style={[
                 s.secretDot,
                 {
-                  backgroundColor: focusRunning ? '#E79B61' : '#CE7378',
+                  backgroundColor: focusRunning ? '#173F31' : '#2F6B4F',
                 },
               ]}
             />
@@ -248,14 +248,14 @@ export function DesktopSidebar() {
             style={[
               s.secretCard,
               {
-                backgroundColor: isDark ? '#242C27' : '#FFF2E7',
-                borderColor: isDark ? '#704C50' : '#E7A9AD',
+                backgroundColor: isDark ? '#18261F' : '#EDF7F0',
+                borderColor: isDark ? '#365844' : '#B9D8C5',
               },
             ]}
           >
             <View style={s.secretTitleRow}>
               <View style={s.secretSparkle}>
-                <Sparkles size={13} color="#A95660" />
+                <Sparkles size={13} color="#2F6B4F" />
               </View>
               <Text style={[s.secretTitle, { color: colors.text }]}>Secret study sprint</Text>
             </View>
@@ -270,7 +270,7 @@ export function DesktopSidebar() {
               style={[
                 s.timerChip,
                 {
-                  backgroundColor: isDark ? '#30453A' : '#DDEFE4',
+                  backgroundColor: isDark ? '#284735' : '#DCEFE3',
                 },
               ]}
             >
@@ -287,9 +287,9 @@ export function DesktopSidebar() {
                 ]}
               >
                 {focusRunning ? (
-                  <Pause size={13} color="#FFF9F3" fill="#FFF9F3" />
+                  <Pause size={13} color="#F4FBF6" fill="#F4FBF6" />
                 ) : (
-                  <Play size={13} color="#FFF9F3" fill="#FFF9F3" />
+                  <Play size={13} color="#F4FBF6" fill="#F4FBF6" />
                 )}
                 <Text style={s.focusButtonText}>
                   {focusRunning ? 'Pause' : focusSeconds === 0 ? 'Again' : 'Start'}
@@ -302,7 +302,7 @@ export function DesktopSidebar() {
                 onPress={resetFocus}
                 style={[
                   s.resetButton,
-                  { borderColor: isDark ? '#506159' : '#D8C9BE' },
+                  { borderColor: isDark ? '#40604E' : '#BCD5C5' },
                 ]}
               >
                 <RotateCcw size={13} color={colors.muted} />
@@ -401,12 +401,12 @@ const s = StyleSheet.create({
   },
   brandDepth: {
     alignSelf: 'flex-start',
-    backgroundColor: '#D89196',
+    backgroundColor: '#2F6B4F',
     borderRadius: 999,
     paddingBottom: 5,
-    shadowColor: '#7D9D8A',
-    shadowOpacity: 0.26,
-    shadowRadius: 11,
+    shadowColor: '#173F31',
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 7 },
     elevation: 5,
   },
@@ -417,7 +417,7 @@ const s = StyleSheet.create({
   brandPill: {
     position: 'relative',
     overflow: 'hidden',
-    borderColor: '#F7FFF9',
+    borderColor: '#F4FBF6',
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 16,
@@ -434,10 +434,10 @@ const s = StyleSheet.create({
     right: 16,
     height: 2,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,.82)',
+    backgroundColor: 'rgba(255,255,255,.76)',
   },
   brand: {
-    color: '#184B39',
+    color: '#163F30',
     fontSize: 22,
     fontWeight: '900',
     letterSpacing: -0.7,
@@ -447,7 +447,7 @@ const s = StyleSheet.create({
     height: 8,
     borderRadius: 999,
     borderWidth: 1.5,
-    borderColor: '#FFF8F4',
+    borderColor: '#F4FBF6',
   },
   semester: { fontSize: 12, marginTop: 9 },
   secretCard: {
@@ -455,7 +455,7 @@ const s = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 15,
     padding: 12,
-    shadowColor: '#8B6C65',
+    shadowColor: '#1F5A44',
     shadowOpacity: 0.12,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: 5 },
@@ -472,7 +472,7 @@ const s = StyleSheet.create({
     borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#F2CFD1',
+    backgroundColor: '#D6EEDF',
   },
   secretTitle: { fontSize: 12, fontWeight: '900' },
   secretCopy: { fontSize: 10, lineHeight: 15, marginTop: 8 },
@@ -484,7 +484,7 @@ const s = StyleSheet.create({
     marginTop: 10,
   },
   timerText: {
-    color: '#245B47',
+    color: '#1F5A44',
     fontSize: 18,
     fontWeight: '900',
     letterSpacing: -0.4,
@@ -498,14 +498,14 @@ const s = StyleSheet.create({
   focusButton: {
     minHeight: 32,
     borderRadius: 10,
-    backgroundColor: '#B6646C',
+    backgroundColor: '#1F5A44',
     paddingHorizontal: 11,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
   },
-  focusButtonText: { color: '#FFF9F3', fontSize: 11, fontWeight: '900' },
+  focusButtonText: { color: '#F4FBF6', fontSize: 11, fontWeight: '900' },
   resetButton: {
     width: 34,
     height: 32,
