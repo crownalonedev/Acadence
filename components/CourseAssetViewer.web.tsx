@@ -25,7 +25,6 @@ const family = (item: CourseViewerItem) => {
   if (type.startsWith('video/') || ['mp4', 'mov', 'webm', 'm4v', 'ogv'].includes(ext)) return 'video';
   if (type.startsWith('audio/') || ['mp3', 'wav', 'm4a', 'aac', 'ogg', 'flac'].includes(ext)) return 'audio';
   if (type.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'heic'].includes(ext)) return 'image';
-  if (['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'].includes(ext)) return 'office';
   return 'frame';
 };
 
@@ -33,10 +32,6 @@ export function CourseAssetViewer({ item, onClose }: { item: CourseViewerItem; o
   const { colors } = useAppTheme();
   const url = item.url || item.canvasUrl;
   const type = family(item);
-  const officeUrl =
-    type === 'office' && url
-      ? `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`
-      : url;
 
   return (
     <View style={[s.wrap, { backgroundColor: colors.surface, borderColor: colors.border }]}> 
@@ -78,13 +73,13 @@ export function CourseAssetViewer({ item, onClose }: { item: CourseViewerItem; o
         ) : (
           <iframe
             title={item.title}
-            src={officeUrl}
+            src={url}
             style={{ width: '100%', height: '72vh', minHeight: 560, border: 0, background: '#fff' }}
             allow="autoplay; fullscreen"
           />
         )}
       </View>
-      <Text style={[s.note, { color: colors.muted }]}>PDFs, media, images and common Office documents open here when Canvas provides a usable preview/download URL. If an institution blocks embedding, use the Canvas button above.</Text>
+      <Text style={[s.note, { color: colors.muted }]}>PDFs, Office previews, videos, audio, images and other Canvas resources stay inside Acadence when the school allows embedding. If Canvas blocks a preview, use the Canvas button above.</Text>
     </View>
   );
 }
