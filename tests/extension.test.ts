@@ -47,6 +47,7 @@ async function collect(failSecondPage = false) {
               id: 10,
               name: 'Course',
               course_code: 'CUR 100',
+              image_download_url: `${origin}/images/course-10.png`,
               term: { name: 'Fall 2026' },
               syllabus_body: '<h2>Course Description</h2><p>Welcome</p>',
               grading_standard_id: 77,
@@ -172,6 +173,7 @@ test('collector follows pagination and includes course content plus current and 
   assert.equal(data.courses[0].gradingScheme[0].value, 90);
   assert.equal(data.courses[0].currentGrade, 'A');
   assert.equal(data.courses[0].termName, 'Fall 2026');
+  assert.equal(data.courses[0].imageUrl, 'https://school.instructure.com/images/course-10.png');
   assert.equal(data.historicalCourses.length, 1);
   assert.equal(data.historicalCourses[0].courseCode, 'OLD 101');
   assert.equal(data.historicalCourses[0].finalGrade, 'A-');
@@ -198,6 +200,11 @@ test('collector follows pagination and includes course content plus current and 
   assert.ok(
     requests.some(
       (url) => url.includes('/courses') && url.includes('enrollment_state=completed'),
+    ),
+  );
+  assert.ok(
+    requests.some(
+      (url) => url.includes('/courses') && url.includes('course_image'),
     ),
   );
   const announcements = new URL(
