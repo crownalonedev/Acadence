@@ -21,16 +21,46 @@ async function collect(failSecondPage = false) {
         link = '',
         status = 200;
       if (url.pathname.endsWith('/profile')) rows = { id: 42, name: 'Student' };
-      else if (url.pathname.endsWith('/courses'))
-        rows = [
-          {
-            id: 10,
-            name: 'Course',
-            syllabus_body: '<h2>Course Description</h2><p>Welcome</p>',
-            grading_standard_id: 77,
-            apply_assignment_group_weights: true,
-          },
-        ];
+      else if (url.pathname.endsWith('/courses')) {
+        if (url.searchParams.get('enrollment_state') === 'completed') {
+          rows = [
+            {
+              id: 9,
+              name: 'Previous Course',
+              course_code: 'OLD 101',
+              start_at: '2025-08-20T00:00:00Z',
+              end_at: '2025-12-15T00:00:00Z',
+              term: { name: 'Fall 2025' },
+              enrollments: [
+                {
+                  computed_current_score: 91,
+                  computed_current_grade: 'A-',
+                  computed_final_score: 90,
+                  computed_final_grade: 'A-',
+                },
+              ],
+            },
+          ];
+        } else {
+          rows = [
+            {
+              id: 10,
+              name: 'Course',
+              course_code: 'CUR 100',
+              term: { name: 'Fall 2026' },
+              syllabus_body: '<h2>Course Description</h2><p>Welcome</p>',
+              grading_standard_id: 77,
+              apply_assignment_group_weights: true,
+              enrollments: [
+                {
+                  computed_current_score: 95,
+                  computed_current_grade: 'A',
+                },
+              ],
+            },
+          ];
+        }
+      }
       else if (url.pathname.endsWith('/grading_standards/77'))
         rows = {
           grading_scheme: [
@@ -131,7 +161,7 @@ async function collect(failSecondPage = false) {
   };
 }
 
-test('collector follows pagination and includes course content plus real submission/zero grade data', async () => {
+test('collector follows pagination and includes course content plus current and historical grade data', async () => {
   const { data, requests } = await collect();
   assert.equal(data.assignments.length, 2);
   assert.equal(data.assignments[0].submissionState, 'submitted');
@@ -140,6 +170,14 @@ test('collector follows pagination and includes course content plus real submiss
   assert.equal(data.courses[0].syllabusBody.includes('Course Description'), true);
   assert.equal(data.courses[0].gradingScheme[0].name, 'A');
   assert.equal(data.courses[0].gradingScheme[0].value, 90);
+  assert.equal(data.courses[0].currentGrade, 'A');
+  assert.equal(data.courses[0].termName, 'Fall 2026');
+  assert.equal(data.historicalCourses.length, 1);
+  assert.equal(data.historicalCourses[0].courseCode, 'OLD 101');
+  assert.equal(data.historicalCourses[0].finalGrade, 'A-');
+  assert.equal(data.historicalCourses[0].finalScore, 90);
+  assert.equal(data.historicalCourses[0].termName, 'Fall 2025');
+  assert.equal(data.historicalCoursesComplete, true);
   assert.equal(data.modules[0].name, 'Week 1');
   assert.equal(data.modules[0].items[0].title, 'Lecture');
   assert.equal(data.files[0].displayName, 'notes.pdf');
@@ -155,6 +193,11 @@ test('collector follows pagination and includes course content plus real submiss
   assert.ok(
     requests.some(
       (url) => url.includes('/modules') && url.includes('include%5B%5D=items'),
+    ),
+  );
+  assert.ok(
+    requests.some(
+      (url) => url.includes('/courses') && url.includes('enrollment_state=completed'),
     ),
   );
   const announcements = new URL(
@@ -180,4 +223,5 @@ test('failed later assignment page discards that partial collection but keeps su
   assert.equal(data.modules.length, 1);
   assert.equal(data.files.length, 1);
   assert.equal(data.pages.length, 1);
+  assert.equal(data.historicalCourses.length, 1);
 });
