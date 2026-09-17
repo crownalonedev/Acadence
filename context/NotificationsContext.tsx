@@ -40,6 +40,7 @@ function ScopedNotifications({ children }: PropsWithChildren) {
   const {
     notificationFeed,
     allCourses,
+    courses,
     connected,
     loading,
     error: syncError,
@@ -51,9 +52,12 @@ function ScopedNotifications({ children }: PropsWithChildren) {
   const inFlight = useRef(new Set<string>());
   const [error, setError] = useState<string | null>(null);
   const feed = newerFeed(notificationFeed, acknowledged);
+  // Notifications intentionally use every synced Canvas course, not only the
+  // subset selected for Home/Grades, so history is never silently hidden.
+  const notificationCourses = allCourses?.length ? allCourses : courses || [];
   const notices = visibleNotices(
     feed,
-    allCourses.map((c) => String(c.id)),
+    notificationCourses.map((c) => String(c.id)),
     pending,
   );
   const markIds = async (ids: string[]) => {
