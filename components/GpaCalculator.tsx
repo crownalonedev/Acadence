@@ -61,18 +61,21 @@ function normalizeGrade(value: string) {
 }
 
 function courseGrade(course: SyncedCourse, previous: boolean) {
-  const direct = normalizeGrade(
-    previous
-      ? course.finalGrade || course.currentGrade || ''
-      : course.currentGrade || course.finalGrade || '',
-  );
-  if (GPA_POINTS[direct] != null) return direct;
+  if (previous) {
+    const direct = normalizeGrade(course.finalGrade || course.currentGrade || '');
+    if (GPA_POINTS[direct] != null) return direct;
+    const score = course.finalScore ?? course.currentScore;
+    if (score == null || !Number.isFinite(Number(score))) return '';
+    return normalizeGrade(letterForScore(score, course).letter || '');
+  }
 
-  const score = previous
-    ? course.finalScore ?? course.currentScore
-    : course.currentScore ?? course.finalScore;
-  const inferred = letterForScore(score, course).letter || '';
-  return normalizeGrade(inferred);
+  // For active courses, do not fall back to Canvas' computed final grade/score.
+  // Canvas may treat ungraded work as zero there, which can look like an F even
+  // when the student simply has no grade yet.
+  const direct = normalizeGrade(course.currentGrade || '');
+  if (GPA_POINTS[direct] != null) return direct;
+  if (course.currentScore == null || !Number.isFinite(Number(course.currentScore))) return '';
+  return normalizeGrade(letterForScore(course.currentScore, course).letter || '');
 }
 
 function courseRow(course: SyncedCourse, source: 'current' | 'previous'): GpaRow {
@@ -114,6 +117,70 @@ function calculate(rows: GpaRow[]): GpaResult {
     included,
     gpa: credits > 0 ? qualityPoints / credits : null,
   };
+}
+
+type GpaCourseRowProps = {
+  row: GpaRow;
+  colors: any;
+  onUpdate: (id: string, patch: Partial<GpaRow>) => void;
+  onRemove: (id: string) => void;
+};
+
+function GpaCourseRow({ row, colors, onUpdate, onRemove }: GpaCourseRowProps) {
+  const validGrade = GPA_POINTS[normalizeGrade(row.grade)] != null;
+  return (
+    <View style={[s.row, { backgroundColor: colors.background, borderColor: colors.border }]}> 
+      <View style={{ flex: 1, minWidth: 120 }}>
+        <TextInput
+          value={row.name}
+          onChangeText={(name) => onUpdate(row.id, { name })}
+          placeholder="Course name"
+          placeholderTextColor={colors.muted}
+          style={[s.nameInput, { color: colors.text }]}
+        />
+        {row.term ? (
+          <Text numberOfLines={1} style={[s.term, { color: colors.muted }]}>{row.term}</Text>
+        ) : null}
+      </View>
+      <TextInput
+        value={row.grade}
+        onChangeText={(grade) => onUpdate(row.id, { grade: grade.toUpperCase().slice(0, 2) })}
+        onBlur={() => onUpdate(row.id, { grade: normalizeGrade(row.grade) })}
+        autoCapitalize="characters"
+        autoCorrect={false}
+        placeholder="A-"
+        placeholderTextColor={colors.muted}
+        style={[
+          s.gradeInput,
+          {
+            color: validGrade || !row.grade ? colors.text : colors.danger,
+            borderColor: validGrade || !row.grade ? colors.border : colors.danger,
+            backgroundColor: colors.surface,
+          },
+        ]}
+      />
+      <TextInput
+        value={row.credits}
+        onChangeText={(credits) =>
+          onUpdate(row.id, {
+            credits: credits.replace(/[^0-9.]/g, '').slice(0, 4),
+          })
+        }
+        keyboardType="decimal-pad"
+        placeholder="3"
+        placeholderTextColor={colors.muted}
+        style={[s.creditInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+      />
+      <Text style={[s.creditLabel, { color: colors.muted }]}>cr</Text>
+      {row.source === 'manual' ? (
+        <Pressable accessibilityLabel={`Remove ${row.name || 'course'}`} onPress={() => onRemove(row.id)} style={s.trash}>
+          <Trash2 size={16} color={colors.muted} />
+        </Pressable>
+      ) : (
+        <View style={s.trash} />
+      )}
+    </View>
+  );
 }
 
 export function GpaCalculator({
@@ -164,61 +231,6 @@ export function GpaCalculator({
 
   const reset = () => setRows(seedRows(courses, historicalCourses));
   const fmt = (value: number | null) => (value == null ? '—' : value.toFixed(2));
-
-  const CourseRow = ({ row }: { row: GpaRow }) => {
-    const validGrade = GPA_POINTS[normalizeGrade(row.grade)] != null;
-    return (
-      <View style={[s.row, { backgroundColor: colors.background, borderColor: colors.border }]}> 
-        <View style={{ flex: 1, minWidth: 120 }}>
-          <TextInput
-            value={row.name}
-            onChangeText={(name) => updateRow(row.id, { name })}
-            placeholder="Course name"
-            placeholderTextColor={colors.muted}
-            style={[s.nameInput, { color: colors.text }]}
-          />
-          {row.term ? (
-            <Text numberOfLines={1} style={[s.term, { color: colors.muted }]}>{row.term}</Text>
-          ) : null}
-        </View>
-        <TextInput
-          value={row.grade}
-          onChangeText={(grade) => updateRow(row.id, { grade: normalizeGrade(grade) })}
-          autoCapitalize="characters"
-          placeholder="A-"
-          placeholderTextColor={colors.muted}
-          style={[
-            s.gradeInput,
-            {
-              color: validGrade || !row.grade ? colors.text : colors.danger,
-              borderColor: validGrade || !row.grade ? colors.border : colors.danger,
-              backgroundColor: colors.surface,
-            },
-          ]}
-        />
-        <TextInput
-          value={row.credits}
-          onChangeText={(credits) =>
-            updateRow(row.id, {
-              credits: credits.replace(/[^0-9.]/g, '').slice(0, 4),
-            })
-          }
-          keyboardType="decimal-pad"
-          placeholder="3"
-          placeholderTextColor={colors.muted}
-          style={[s.creditInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
-        />
-        <Text style={[s.creditLabel, { color: colors.muted }]}>cr</Text>
-        {row.source === 'manual' ? (
-          <Pressable accessibilityLabel={`Remove ${row.name || 'course'}`} onPress={() => removeRow(row.id)} style={s.trash}>
-            <Trash2 size={16} color={colors.muted} />
-          </Pressable>
-        ) : (
-          <View style={s.trash} />
-        )}
-      </View>
-    );
-  };
 
   return (
     <>
@@ -291,15 +303,17 @@ export function GpaCalculator({
               </View>
             </View>
 
-            <Text style={[s.help, { color: colors.muted }]}>Canvas provides the course grades, but usually does not provide university credit hours. Acadence defaults each course to 3 credits; adjust the credit field for accurate weighted GPA. Current grades can still change, so cumulative GPA is projected until the term is finalized.</Text>
+            <Text style={[s.help, { color: colors.muted }]}>Courses without a posted grade are ignored until Canvas has a real current grade. Canvas usually does not provide university credit hours, so Acadence defaults each course to 3 credits; adjust the credit field for accurate weighted GPA. Current grades can still change, so cumulative GPA is projected until the term is finalized.</Text>
 
-            <ScrollView style={s.scroll} contentContainerStyle={{ paddingBottom: 10 }}>
+            <ScrollView style={s.scroll} contentContainerStyle={{ paddingBottom: 10 }} keyboardShouldPersistTaps="handled">
               <View style={s.sectionHead}>
                 <Text style={[s.sectionTitle, { color: colors.text }]}>Current semester</Text>
                 <Text style={[s.sectionCount, { color: colors.muted }]}>{currentRows.length}</Text>
               </View>
               <View style={{ gap: 8 }}>
-                {currentRows.length ? currentRows.map((row) => <CourseRow key={row.id} row={row} />) : (
+                {currentRows.length ? currentRows.map((row) => (
+                  <GpaCourseRow key={row.id} row={row} colors={colors} onUpdate={updateRow} onRemove={removeRow} />
+                )) : (
                   <View style={[s.empty, { borderColor: colors.border, backgroundColor: colors.background }]}><Text style={[s.emptyText, { color: colors.muted }]}>No current courses with GPA data yet.</Text></View>
                 )}
               </View>
@@ -309,7 +323,9 @@ export function GpaCalculator({
                 <Text style={[s.sectionCount, { color: colors.muted }]}>{previousRows.length}</Text>
               </View>
               <View style={{ gap: 8 }}>
-                {previousRows.length ? previousRows.map((row) => <CourseRow key={row.id} row={row} />) : (
+                {previousRows.length ? previousRows.map((row) => (
+                  <GpaCourseRow key={row.id} row={row} colors={colors} onUpdate={updateRow} onRemove={removeRow} />
+                )) : (
                   <View style={[s.empty, { borderColor: colors.border, backgroundColor: colors.background }]}><Text style={[s.emptyText, { color: colors.muted }]}>No prior Canvas courses have synced yet. Reload the extension and sync once.</Text></View>
                 )}
               </View>
