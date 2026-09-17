@@ -42,6 +42,7 @@ export type SyncedAssignment = {
   courseId: string | number;
   assignmentGroupId?: string;
   name: string;
+  description?: string;
   dueAt?: string | null;
   pointsPossible?: number | null;
   gradingType?: string;
@@ -125,6 +126,9 @@ export type SyncedFile = {
   contentType?: string;
   size?: number;
   updatedAt?: string;
+  downloadUrl?: string;
+  previewUrl?: string;
+  publicUrl?: string;
   htmlUrl?: string;
 };
 
@@ -133,6 +137,7 @@ export type SyncedPage = {
   courseId: string;
   title: string;
   url?: string;
+  body?: string;
   updatedAt?: string;
   frontPage?: boolean;
   htmlUrl?: string;
