@@ -271,7 +271,15 @@ export default function Home() {
         </View>
         <View style={s.actions}>
           {editing ? (
-            <Pressable onPress={() => setEditing(false)} style={[s.done, { backgroundColor: colors.accent }]}> 
+            <Pressable
+              onPress={() => setEditing(false)}
+              style={({ hovered, pressed }: any) => [
+                s.done,
+                { backgroundColor: colors.accent },
+                hovered && { transform: [{ translateY: -1 }] },
+                pressed && { transform: [{ translateY: 1 }, { scale: 0.98 }] },
+              ]}
+            >
               <Text style={s.doneText}>Done</Text>
             </Pressable>
           ) : (
@@ -336,14 +344,14 @@ export default function Home() {
 
 const s = StyleSheet.create({
   top: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8, marginBottom: 24 },
-  actions: { flexDirection: 'row', gap: 8 },
+  actions: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
   greeting: { fontSize: 30, fontWeight: '800' },
   sub: { fontSize: 14, marginTop: 5 },
   icon: { position: 'relative', width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: 'center', justifyContent: 'center', overflow: 'visible' },
   badge: { position: 'absolute', right: -8, top: -8, minWidth: 24, height: 22, paddingHorizontal: 5, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   badgeText: { color: '#fff', fontSize: 10, fontWeight: '900', lineHeight: 12, textAlign: 'center', includeFontPadding: false },
-  done: { padding: 12, borderRadius: 20 },
-  doneText: { color: '#fff', fontWeight: '800' },
+  done: { minWidth: 76, height: 42, borderRadius: 21, paddingHorizontal: 18, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start' },
+  doneText: { color: '#fff', fontSize: 13, lineHeight: 16, fontWeight: '900', textAlign: 'center', includeFontPadding: false },
   add: { height: 48, borderWidth: 1, borderStyle: 'dashed', borderRadius: 15, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 7 },
   addText: { fontWeight: '800' },
   wrapper: { padding: 7, marginHorizontal: -7 },
