@@ -29,6 +29,12 @@ async function collectCanvasData() {
     }
     return rows;
   };
+  const historyStart = (value) => {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed)
+      ? new Date(parsed).toISOString()
+      : "1970-01-01T00:00:00.000Z";
+  };
   const profile = await (await request("/api/v1/users/self/profile")).json();
   const courses = await list(
     "/api/v1/courses?enrollment_state=active&include[]=total_scores&include[]=current_grading_period_scores&per_page=100",
@@ -43,7 +49,6 @@ async function collectCanvasData() {
     grades: [],
     assignmentGroups: [],
   };
-  const startDate = new Date(Date.now() - 30 * 86400000).toISOString();
   for (const course of courses) {
     const courseId = String(course.id);
     try {
@@ -115,8 +120,11 @@ async function collectCanvasData() {
       /* Do not replace good assignment/grade data with an empty failed fetch. */
     }
     try {
+      // Canvas defaults this endpoint to a short date window. Request the whole
+      // course history so Acadence can show older announcements on first sync.
+      const startDate = historyStart(course.start_at);
       const rows = await list(
-        `/api/v1/announcements?context_codes[]=course_${course.id}&active_only=true&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(syncedAt)}&per_page=100`,
+        `/api/v1/announcements?context_codes[]=course_${course.id}&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(syncedAt)}&per_page=100`,
       );
       announcements.push(
         ...rows.map((a) => ({
