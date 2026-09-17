@@ -3,6 +3,7 @@ import { Check } from 'lucide-react-native';
 import { useAppTheme } from '@/context/ThemeContext';
 
 const PATH_LENGTH = 420;
+const FONT_STACK = 'system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
 const STRIKE_PATH =
   'M 10 16.91 s 79.8 -11.36 98.1 -11.34 c 22.2 0.02 -47.82 14.25 -33.39 22.02 c 12.61 6.77 124.18 -27.98 133.31 -17.28 c 7.52 8.38 -26.8 20.02 4.61 22.05 c 24.55 1.93 113.37 -20.36 113.37 -20.36';
 
@@ -56,7 +57,16 @@ export function PlayfulTaskToggle({
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: '1 1 auto' }}>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        minWidth: 0,
+        flex: '1 1 auto',
+        fontFamily: FONT_STACK,
+      }}
+    >
       <button
         type="button"
         role="checkbox"
@@ -76,15 +86,17 @@ export function PlayfulTaskToggle({
           cursor: 'pointer',
           transform: pressed ? 'scale(.92)' : 'scale(1)',
           transition: 'transform 180ms cubic-bezier(.2,.8,.2,1), background-color 180ms ease, border-color 180ms ease',
+          fontFamily: FONT_STACK,
         }}
       >
         {visual ? <Check size={17} color="#fff" strokeWidth={3.5} /> : null}
       </button>
 
-      <div style={{ position: 'relative', minWidth: 0, flex: '0 1 auto' }}>
+      <div style={{ position: 'relative', minWidth: 0, flex: '0 1 auto', fontFamily: FONT_STACK }}>
         <span
           style={{
             color: visual ? colors.muted : colors.text,
+            fontFamily: FONT_STACK,
             fontSize: 15,
             fontWeight: 800,
             lineHeight: '20px',
