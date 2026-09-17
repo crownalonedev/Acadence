@@ -7,6 +7,7 @@ import { useNotifications } from "@/context/NotificationsContext";
 
 const spring = "cubic-bezier(.2,.8,.2,1)",
   font = 'system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif';
+
 export function NotificationPopover({
   visible,
   onClose,
@@ -18,15 +19,19 @@ export function NotificationPopover({
   const router = useRouter();
   const { notices, unread, mark, markAll, status, error } = useNotifications();
   const preview = notices.slice(0, 3);
+  const totalLabel = notices.length > 999 ? "999+" : String(notices.length);
   const [hovered, setHovered] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = notices.find((n) => n.id === selectedId) || null;
+
   if (!visible || typeof document === "undefined") return null;
+
   const expanded = hovered || !!selected;
   const viewAll = () => {
     onClose();
     router.push("/(tabs)/notifications" as any);
   };
+
   const panel = (
     <div
       style={{
@@ -50,6 +55,7 @@ export function NotificationPopover({
           cursor: "default",
         }}
       />
+
       <div
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
@@ -75,6 +81,7 @@ export function NotificationPopover({
               {status || "No notifications yet. You’re all caught up."}
             </div>
           )}
+
           {preview.map((n, i) => (
             <div
               key={n.id}
@@ -136,6 +143,7 @@ export function NotificationPopover({
                   {n.title}
                 </span>
               </div>
+
               <div
                 style={{
                   fontSize: 13,
@@ -151,6 +159,7 @@ export function NotificationPopover({
             </div>
           ))}
         </div>
+
         <div
           style={{
             display: "flex",
@@ -176,20 +185,27 @@ export function NotificationPopover({
           >
             <span
               style={{
-                width: 20,
+                minWidth: 20,
                 height: 20,
-                borderRadius: 10,
+                padding: "0 6px",
+                borderRadius: 999,
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                boxSizing: "border-box",
                 fontSize: 11,
+                lineHeight: "20px",
                 fontWeight: 800,
+                fontVariantNumeric: "tabular-nums",
+                whiteSpace: "nowrap",
                 color: "#fff",
                 background: colors.muted,
+                flex: "0 0 auto",
               }}
             >
-              {notices.length}
+              {totalLabel}
             </span>
+
             <span style={{ display: "grid", fontSize: 13, fontWeight: 700 }}>
               <span
                 style={{
@@ -218,6 +234,7 @@ export function NotificationPopover({
               </span>
             </span>
           </button>
+
           {unread > 0 && (
             <button
               onClick={markAll}
@@ -240,6 +257,7 @@ export function NotificationPopover({
             </button>
           )}
         </div>
+
         {error && (
           <div
             role="alert"
@@ -249,6 +267,7 @@ export function NotificationPopover({
           </div>
         )}
       </div>
+
       {selected && (
         <div
           onMouseEnter={() => setHovered(true)}
@@ -292,6 +311,7 @@ export function NotificationPopover({
           >
             <X size={15} color={colors.muted} />
           </button>
+
           <div
             style={{
               fontSize: 11,
@@ -327,6 +347,7 @@ export function NotificationPopover({
           >
             {selected.body}
           </div>
+
           {selected.htmlUrl && (
             <a
               href={selected.htmlUrl}
@@ -342,6 +363,7 @@ export function NotificationPopover({
               Open in Canvas <ArrowUpRight size={13} color={colors.accent} />
             </a>
           )}
+
           {!selected.read ? (
             <button
               onClick={() => mark(selected.id)}
@@ -384,8 +406,10 @@ export function NotificationPopover({
           )}
         </div>
       )}
+
       <style>{`@media(max-width:760px){.acadence-notification-detail{right:16px!important;top:auto!important;bottom:16px;max-height:60vh!important;box-sizing:border-box}}@keyframes acadencePopoverSpring{0%{opacity:0;transform:translateX(10px) scale(.94)}65%{opacity:1;transform:translateX(-1px) scale(1.008)}100%{opacity:1;transform:translateX(0) scale(1)}}`}</style>
     </div>
   );
+
   return createPortal(panel, document.body);
 }
