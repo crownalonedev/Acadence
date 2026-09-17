@@ -247,6 +247,8 @@ async function collectCanvasData() {
           contentType: file["content-type"] || file.content_type,
           size: file.size,
           updatedAt: file.updated_at || file.created_at,
+          downloadUrl: file.url,
+          previewUrl: file.preview_url,
           htmlUrl: `${location.origin}/courses/${course.id}/files/${file.id}`,
         })),
       );
