@@ -18,6 +18,7 @@ import {
 } from 'lucide-react-native';
 import Animated, { Layout } from 'react-native-reanimated';
 import { Screen } from '@/components/Screen';
+import { GpaCalculator } from '@/components/GpaCalculator';
 import { SyncedCourse, useCanvasData } from '@/context/CanvasDataContext';
 import { useAppTheme } from '@/context/ThemeContext';
 import { calculateGrade, effectiveWeights, letterForScore } from '@/utils/grading';
@@ -95,6 +96,8 @@ export default function Grades() {
         </View>
       </View>
 
+      <GpaCalculator courses={courses} />
+
       <View style={s.grid}>
         {courses.map((c) => {
           const rows = grades.filter((g) => String(g.courseId) === String(c.id) && !g.excused);
@@ -122,7 +125,7 @@ export default function Grades() {
               style={[s.courseCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
             >
               <View style={s.courseHead}>
-                <View style={[s.icon, { backgroundColor: colors.accentSoft }]}>
+                <View style={[s.icon, { backgroundColor: colors.accentSoft }]}> 
                   <GraduationCap size={19} color={colors.accent} />
                 </View>
                 <View style={{ flex: 1, minWidth: 0 }}>
@@ -132,7 +135,7 @@ export default function Grades() {
                 <View style={s.scoreBlock}>
                   <Text style={[s.scoreNumber, { color: colors.text }]}>{score != null ? `${round(score)}%` : '—'}</Text>
                   {letter ? (
-                    <View style={[s.letterPill, { backgroundColor: colors.accentSoft }]}>
+                    <View style={[s.letterPill, { backgroundColor: colors.accentSoft }]}> 
                       <Text style={[s.letter, { color: colors.accent }]}>{letter}</Text>
                     </View>
                   ) : null}
@@ -229,7 +232,7 @@ export default function Grades() {
                 {projectedLetter.letter ? <Text style={[s.projectionLetter, { color: colors.accent }]}>{projectedLetter.estimated ? '~' : ''}{projectedLetter.letter}</Text> : null}
               </View>
               {projected?.percent != null && course?.currentScore != null ? (
-                <Text style={[s.delta, { color: projected.percent >= course.currentScore ? colors.accent : colors.danger }]}>
+                <Text style={[s.delta, { color: projected.percent >= course.currentScore ? colors.accent : colors.danger }]}> 
                   {projected.percent >= course.currentScore ? '+' : ''}{round(projected.percent - course.currentScore)}%
                 </Text>
               ) : null}
