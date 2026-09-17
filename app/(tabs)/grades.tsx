@@ -27,7 +27,7 @@ import { radius } from '@/constants/theme';
 const round = (n: number) => Math.round(n * 10) / 10;
 
 export default function Grades() {
-  const { courses, assignments, grades, assignmentGroups, connected } = useCanvasData();
+  const { courses, historicalCourses, assignments, grades, assignmentGroups, connected } = useCanvasData();
   const { colors } = useAppTheme();
   const [course, setCourse] = useState<SyncedCourse | null>(null);
   const [changes, setChanges] = useState<Record<string, string>>({});
@@ -96,7 +96,7 @@ export default function Grades() {
         </View>
       </View>
 
-      <GpaCalculator courses={courses} />
+      <GpaCalculator courses={courses} historicalCourses={historicalCourses} />
 
       <View style={s.grid}>
         {courses.map((c) => {
