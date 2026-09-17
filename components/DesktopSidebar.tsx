@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 import {
@@ -19,11 +20,25 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { GripVertical, Sparkles } from 'lucide-react-native';
+import {
+  GripVertical,
+  Pause,
+  Play,
+  RotateCcw,
+  Sparkles,
+} from 'lucide-react-native';
 import { navigationItems, NavigationItemId } from '@/constants/navigation';
 import { useNavigationPreferences } from '@/context/NavigationContext';
 import { useCanvasData } from '@/context/CanvasDataContext';
 import { useAppTheme } from '@/context/ThemeContext';
+
+const FOCUS_SECONDS = 10 * 60;
+
+function formatFocusTime(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
 
 function SortableNavItem({
   id,
@@ -99,8 +114,12 @@ export function DesktopSidebar() {
   const router = useRouter();
   const path = usePathname();
   const { items, setItems, editing } = useNavigationPreferences();
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const { profile } = useCanvasData();
+  const [secretOpen, setSecretOpen] = useState(false);
+  const [focusRunning, setFocusRunning] = useState(false);
+  const [focusSeconds, setFocusSeconds] = useState(FOCUS_SECONDS);
+
   const main = items.filter((id) => id !== 'profile');
   const profileItem = navigationItems.profile;
   const ProfileIcon = profileItem.icon;
@@ -110,6 +129,20 @@ export function DesktopSidebar() {
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
 
+  useEffect(() => {
+    if (!focusRunning) return;
+    const interval = setInterval(() => {
+      setFocusSeconds((seconds) => {
+        if (seconds <= 1) {
+          setFocusRunning(false);
+          return 0;
+        }
+        return seconds - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [focusRunning]);
+
   const end = (e: DragEndEvent) => {
     if (!e.over || e.active.id === e.over.id) return;
     const from = main.indexOf(e.active.id as NavigationItemId);
@@ -118,6 +151,20 @@ export function DesktopSidebar() {
     const reordered = arrayMove(main, from, to);
     const profileIndex = items.indexOf('profile');
     setItems(profileIndex >= 0 ? [...reordered, 'profile'] : reordered);
+  };
+
+  const toggleFocus = () => {
+    if (focusSeconds === 0) {
+      setFocusSeconds(FOCUS_SECONDS);
+      setFocusRunning(true);
+      return;
+    }
+    setFocusRunning((running) => !running);
+  };
+
+  const resetFocus = () => {
+    setFocusRunning(false);
+    setFocusSeconds(FOCUS_SECONDS);
   };
 
   const renderNormal = main.map((id) => {
@@ -164,13 +211,105 @@ export function DesktopSidebar() {
       ]}
     >
       <View>
-        <View style={s.brandDepth}>
-          <View style={s.brandPill}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Acadence"
+          accessibilityHint="Open a hidden study focus tool"
+          onPress={() => setSecretOpen((open) => !open)}
+          style={({ pressed }) => [
+            s.brandDepth,
+            pressed && s.brandDepthPressed,
+          ]}
+        >
+          <View
+            style={[
+              s.brandPill,
+              {
+                backgroundColor: focusRunning ? '#F7D9A4' : '#BDE7CE',
+              },
+            ]}
+          >
             <View pointerEvents="none" style={s.brandHighlight} />
             <Text style={s.brand}>acadence</Text>
+            <View
+              style={[
+                s.secretDot,
+                {
+                  backgroundColor: focusRunning ? '#E79B61' : '#CE7378',
+                },
+              ]}
+            />
           </View>
-        </View>
+        </Pressable>
         <Text style={[s.semester, { color: colors.muted }]}>Current semester</Text>
+
+        {secretOpen ? (
+          <View
+            style={[
+              s.secretCard,
+              {
+                backgroundColor: isDark ? '#242C27' : '#FFF2E7',
+                borderColor: isDark ? '#704C50' : '#E7A9AD',
+              },
+            ]}
+          >
+            <View style={s.secretTitleRow}>
+              <View style={s.secretSparkle}>
+                <Sparkles size={13} color="#A95660" />
+              </View>
+              <Text style={[s.secretTitle, { color: colors.text }]}>Secret study sprint</Text>
+            </View>
+
+            <Text style={[s.secretCopy, { color: colors.muted }]}> 
+              {focusSeconds === 0
+                ? 'Nice. Ten focused minutes, done.'
+                : 'Pick one thing and give it ten distraction-free minutes.'}
+            </Text>
+
+            <View
+              style={[
+                s.timerChip,
+                {
+                  backgroundColor: isDark ? '#30453A' : '#DDEFE4',
+                },
+              ]}
+            >
+              <Text style={s.timerText}>{formatFocusTime(focusSeconds)}</Text>
+            </View>
+
+            <View style={s.secretActions}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={toggleFocus}
+                style={({ pressed }) => [
+                  s.focusButton,
+                  pressed && { transform: [{ translateY: 1 }] },
+                ]}
+              >
+                {focusRunning ? (
+                  <Pause size={13} color="#FFF9F3" fill="#FFF9F3" />
+                ) : (
+                  <Play size={13} color="#FFF9F3" fill="#FFF9F3" />
+                )}
+                <Text style={s.focusButtonText}>
+                  {focusRunning ? 'Pause' : focusSeconds === 0 ? 'Again' : 'Start'}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Reset focus timer"
+                onPress={resetFocus}
+                style={[
+                  s.resetButton,
+                  { borderColor: isDark ? '#506159' : '#D8C9BE' },
+                ]}
+              >
+                <RotateCcw size={13} color={colors.muted} />
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
       </View>
 
       <View style={s.nav}>
@@ -262,42 +401,119 @@ const s = StyleSheet.create({
   },
   brandDepth: {
     alignSelf: 'flex-start',
-    backgroundColor: '#A7CDB8',
+    backgroundColor: '#D89196',
     borderRadius: 999,
-    paddingBottom: 4,
-    shadowColor: '#7FAE96',
-    shadowOpacity: 0.24,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    paddingBottom: 5,
+    shadowColor: '#7D9D8A',
+    shadowOpacity: 0.26,
+    shadowRadius: 11,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 5,
+  },
+  brandDepthPressed: {
+    paddingBottom: 2,
+    transform: [{ translateY: 3 }],
   },
   brandPill: {
     position: 'relative',
     overflow: 'hidden',
-    backgroundColor: '#E6F2EB',
-    borderColor: '#F7FBF8',
+    borderColor: '#F7FFF9',
     borderWidth: 1,
     borderRadius: 999,
-    paddingHorizontal: 15,
-    paddingVertical: 7,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     transform: [{ translateY: -1 }],
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   brandHighlight: {
     position: 'absolute',
     top: 2,
-    left: 14,
-    right: 14,
+    left: 16,
+    right: 16,
     height: 2,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,.78)',
+    backgroundColor: 'rgba(255,255,255,.82)',
   },
   brand: {
-    color: '#245C47',
+    color: '#184B39',
     fontSize: 22,
     fontWeight: '900',
     letterSpacing: -0.7,
   },
-  semester: { fontSize: 12, marginTop: 8 },
+  secretDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: '#FFF8F4',
+  },
+  semester: { fontSize: 12, marginTop: 9 },
+  secretCard: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderRadius: 15,
+    padding: 12,
+    shadowColor: '#8B6C65',
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 2,
+  },
+  secretTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  secretSparkle: {
+    width: 25,
+    height: 25,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F2CFD1',
+  },
+  secretTitle: { fontSize: 12, fontWeight: '900' },
+  secretCopy: { fontSize: 10, lineHeight: 15, marginTop: 8 },
+  timerChip: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginTop: 10,
+  },
+  timerText: {
+    color: '#245B47',
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: -0.4,
+    fontVariant: ['tabular-nums'],
+  },
+  secretActions: {
+    flexDirection: 'row',
+    gap: 7,
+    marginTop: 10,
+  },
+  focusButton: {
+    minHeight: 32,
+    borderRadius: 10,
+    backgroundColor: '#B6646C',
+    paddingHorizontal: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  focusButtonText: { color: '#FFF9F3', fontSize: 11, fontWeight: '900' },
+  resetButton: {
+    width: 34,
+    height: 32,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   nav: { gap: 5, marginTop: 30 },
   item: {
     minHeight: 44,
