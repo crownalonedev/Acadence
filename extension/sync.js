@@ -145,6 +145,7 @@ async function collectCanvasData() {
           courseId,
           assignmentGroupId,
           name: a.name,
+          description: a.description || "",
           dueAt: a.due_at,
           pointsPossible: a.points_possible,
           gradingType: a.grading_type,
@@ -238,8 +239,17 @@ async function collectCanvasData() {
 
     try {
       const rows = await list(`/api/v1/courses/${course.id}/files?per_page=100`);
-      files.push(
-        ...rows.map((file) => ({
+      for (const file of rows) {
+        let publicUrl;
+        try {
+          const result = await (
+            await request(`/api/v1/files/${file.id}/public_url`)
+          ).json();
+          publicUrl = result?.public_url;
+        } catch {
+          /* A Canvas instance may not expose public inline URLs for every file. */
+        }
+        files.push({
           id: String(file.id),
           courseId,
           displayName: file.display_name || file.filename || "File",
@@ -249,9 +259,10 @@ async function collectCanvasData() {
           updatedAt: file.updated_at || file.created_at,
           downloadUrl: file.url,
           previewUrl: file.preview_url,
+          publicUrl,
           htmlUrl: `${location.origin}/courses/${course.id}/files/${file.id}`,
-        })),
-      );
+        });
+      }
       completeCourseIds.files.push(courseId);
     } catch {
       /* Preserve the previous file snapshot on failure. */
@@ -259,19 +270,29 @@ async function collectCanvasData() {
 
     try {
       const rows = await list(`/api/v1/courses/${course.id}/pages?per_page=100`);
-      pages.push(
-        ...rows
-          .filter((page) => page.published !== false)
-          .map((page) => ({
-            id: String(page.page_id ?? page.url),
-            courseId,
-            title: page.title,
-            url: page.url,
-            updatedAt: page.updated_at || page.created_at,
-            frontPage: !!page.front_page,
-            htmlUrl: `${location.origin}/courses/${course.id}/pages/${encodeURIComponent(page.url)}`,
-          })),
-      );
+      for (const page of rows.filter((page) => page.published !== false)) {
+        let body = "";
+        try {
+          const detail = await (
+            await request(
+              `/api/v1/courses/${course.id}/pages/${encodeURIComponent(page.url)}`,
+            )
+          ).json();
+          body = detail?.body || "";
+        } catch {
+          /* Keep the page listing even if its body is unavailable. */
+        }
+        pages.push({
+          id: String(page.page_id ?? page.url),
+          courseId,
+          title: page.title,
+          url: page.url,
+          body,
+          updatedAt: page.updated_at || page.created_at,
+          frontPage: !!page.front_page,
+          htmlUrl: `${location.origin}/courses/${course.id}/pages/${encodeURIComponent(page.url)}`,
+        });
+      }
       completeCourseIds.pages.push(courseId);
     } catch {
       /* Preserve the previous page snapshot on failure. */
