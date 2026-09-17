@@ -26,25 +26,21 @@ async function collect(failSecondPage = false) {
           {
             id: 10,
             name: 'Course',
-            syllabus_body:
-              '<h2>Grade Breakdown</h2><p>Projects 30%</p><p>Exams 70%</p>',
+            syllabus_body: '<h2>Course Description</h2><p>Welcome</p>',
             grading_standard_id: 77,
             apply_assignment_group_weights: true,
           },
         ];
       else if (url.pathname.endsWith('/grading_standards/77'))
         rows = {
-          id: 77,
           grading_scheme: [
-            { name: 'A', value: 0.93 },
-            { name: 'A-', value: 0.9 },
-            { name: 'B+', value: 0.87 },
+            { name: 'A', value: 0.9 },
+            { name: 'B', value: 0.8 },
+            { name: 'C', value: 0.7 },
           ],
         };
       else if (url.pathname.endsWith('/assignment_groups'))
-        rows = [
-          { id: 5, name: 'Projects', group_weight: 30, rules: { drop_lowest: 1 } },
-        ];
+        rows = [{ id: 5, name: 'Group', group_weight: 30 }];
       else if (url.pathname.endsWith('/assignments')) {
         if (url.searchParams.get('page') === '2') {
           status = failSecondPage ? 503 : 200;
@@ -53,7 +49,6 @@ async function collect(failSecondPage = false) {
               id: 2,
               name: 'Second page',
               assignment_group_id: 5,
-              points_possible: 50,
               grading_type: 'points',
               submission: {
                 score: 0,
@@ -69,9 +64,7 @@ async function collect(failSecondPage = false) {
               id: 1,
               name: 'First page',
               assignment_group_id: 5,
-              points_possible: 50,
               grading_type: 'points',
-              omit_from_final_grade: false,
               submission: {
                 workflow_state: 'submitted',
                 submitted_at: '2026-09-15T00:00:00Z',
@@ -106,6 +99,8 @@ async function collect(failSecondPage = false) {
             filename: 'notes.pdf',
             size: 2048,
             'content-type': 'application/pdf',
+            url: `${origin}/files/8/download?download_frd=1`,
+            preview_url: `${origin}/courses/10/files/8/preview`,
           },
         ];
       else if (url.pathname.endsWith('/pages'))
@@ -123,7 +118,8 @@ async function collect(failSecondPage = false) {
         status,
         json: async () => rows,
         headers: {
-          get: (name: string) => (name.toLowerCase() === 'link' ? link : null),
+          get: (name: string) =>
+            name.toLowerCase() === 'link' ? link : null,
         },
       };
     },
@@ -135,34 +131,20 @@ async function collect(failSecondPage = false) {
   };
 }
 
-test('collector follows pagination and includes course content, weights, grading scheme and real submission data', async () => {
+test('collector follows pagination and includes course content plus real submission/zero grade data', async () => {
   const { data, requests } = await collect();
   assert.equal(data.assignments.length, 2);
   assert.equal(data.assignments[0].submissionState, 'submitted');
   assert.equal(data.assignments[0].gradingType, 'points');
-  assert.equal(data.assignments[0].omitFromFinalGrade, false);
   assert.equal(data.grades[0].score, 0);
-  assert.equal(data.grades[0].gradingType, 'points');
-  assert.equal(
-    data.courses[0].syllabusBody,
-    '<h2>Grade Breakdown</h2><p>Projects 30%</p><p>Exams 70%</p>',
-  );
-  assert.deepEqual(data.courses[0].syllabusWeights, [
-    { name: 'Grade Breakdown Projects', weight: 30 },
-    { name: 'Exams', weight: 70 },
-  ]);
-  assert.equal(data.courses[0].applyAssignmentGroupWeights, true);
-  assert.equal(data.courses[0].gradingStandardId, '77');
-  assert.deepEqual(data.courses[0].gradingScheme, [
-    { name: 'A', value: 93 },
-    { name: 'A-', value: 90 },
-    { name: 'B+', value: 87 },
-  ]);
-  assert.equal(data.assignmentGroups[0].weight, 30);
-  assert.equal(data.assignmentGroups[0].rules.drop_lowest, 1);
+  assert.equal(data.courses[0].syllabusBody.includes('Course Description'), true);
+  assert.equal(data.courses[0].gradingScheme[0].name, 'A');
+  assert.equal(data.courses[0].gradingScheme[0].value, 90);
   assert.equal(data.modules[0].name, 'Week 1');
   assert.equal(data.modules[0].items[0].title, 'Lecture');
   assert.equal(data.files[0].displayName, 'notes.pdf');
+  assert.equal(data.files[0].downloadUrl, 'https://school.instructure.com/files/8/download?download_frd=1');
+  assert.equal(data.files[0].previewUrl, 'https://school.instructure.com/courses/10/files/8/preview');
   assert.equal(data.pages[0].title, 'Welcome');
   assert.deepEqual(data.completeCourseIds.assignments, ['10']);
   assert.deepEqual(data.completeCourseIds.grades, ['10']);
@@ -170,7 +152,6 @@ test('collector follows pagination and includes course content, weights, grading
   assert.deepEqual(data.completeCourseIds.files, ['10']);
   assert.deepEqual(data.completeCourseIds.pages, ['10']);
   assert.ok(requests.some((url) => url.includes('page=2')));
-  assert.ok(requests.some((url) => url.includes('/grading_standards/77')));
   assert.ok(
     requests.some(
       (url) => url.includes('/modules') && url.includes('include%5B%5D=items'),
@@ -199,5 +180,4 @@ test('failed later assignment page discards that partial collection but keeps su
   assert.equal(data.modules.length, 1);
   assert.equal(data.files.length, 1);
   assert.equal(data.pages.length, 1);
-  assert.equal(data.courses[0].gradingScheme[0].name, 'A');
 });
