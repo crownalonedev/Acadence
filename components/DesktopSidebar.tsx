@@ -152,8 +152,8 @@ export function DesktopSidebar() {
               backgroundColor: active ? colors.accentSoft : colors.background,
               borderColor: active ? colors.accentSoft : colors.border,
             },
-            hovered && !active && { transform: [{ translateX: collapsed ? 0 : 2 }, { scale: collapsed ? 1.03 : 1 }] },
-            pressed && { opacity: 0.78 },
+            hovered && !active && { transform: [{ translateX: collapsed ? 0 : 2 }, { scale: collapsed ? 1.025 : 1 }] },
+            pressed && { transform: [{ translateY: 1 }, { scale: 0.98 }], opacity: 0.9 },
           ]}
         >
           <Icon size={19} color={active ? colors.accent : colors.text} />
@@ -216,9 +216,10 @@ export function DesktopSidebar() {
             }}
             style={({ hovered, pressed }: any) => [
               s.collapseButton,
+              collapsed && s.collapseButtonCollapsed,
               { backgroundColor: colors.background, borderColor: colors.border },
-              hovered && { transform: [{ scale: 1.06 }] },
-              pressed && { transform: [{ scale: 0.96 }] },
+              hovered && { transform: [{ scale: 1.05 }] },
+              pressed && { transform: [{ translateY: 1 }, { scale: 0.97 }] },
             ]}
           >
             {collapsed ? <ChevronRight size={16} color={colors.muted} /> : <ChevronLeft size={16} color={colors.muted} />}
@@ -245,7 +246,7 @@ export function DesktopSidebar() {
                 style={({ hovered, pressed }: any) => [
                   s.focusButton,
                   hovered && { transform: [{ translateY: -1 }] },
-                  pressed && { transform: [{ translateY: 1 }, { scale: 0.98 }] },
+                  pressed && { transform: [{ translateY: 2 }, { scale: 0.98 }] },
                 ]}
               >
                 {focusRunning ? <Pause size={13} color="#F4FBF6" fill="#F4FBF6" /> : <Play size={13} color="#F4FBF6" fill="#F4FBF6" />}
@@ -264,7 +265,7 @@ export function DesktopSidebar() {
         ) : null}
       </View>
 
-      <View style={s.nav}>
+      <View style={[s.nav, collapsed && s.navCollapsed]}>
         {editing && !collapsed ? (
           <DndContext sensors={sensors} collisionDetection={closestCenter} modifiers={[restrictToVerticalAxis, restrictToParentElement]} onDragEnd={end}>
             <SortableContext items={main} strategy={verticalListSortingStrategy}>
@@ -289,11 +290,12 @@ export function DesktopSidebar() {
       <div title={collapsed ? 'Ask Acadence' : undefined} style={{ width: '100%' }}>
         <Pressable
           onPress={() => router.push('/(tabs)/ai')}
-          style={({ hovered }: any) => [
+          style={({ hovered, pressed }: any) => [
             s.ai,
             collapsed && s.aiCollapsed,
             { borderColor: colors.border, backgroundColor: colors.background },
             hovered && { transform: [{ translateY: -1 }] },
+            pressed && { transform: [{ translateY: 1 }, { scale: 0.98 }] },
           ]}
         >
           <Sparkles size={17} color={colors.accent} />
@@ -324,16 +326,17 @@ export function DesktopSidebar() {
 
 const s = StyleSheet.create({
   sidebar: { width: 244, minHeight: '100%', borderRightWidth: 1, padding: 24, paddingTop: 30 },
-  sidebarCollapsed: { width: 82, paddingHorizontal: 12 },
+  sidebarCollapsed: { width: 78, paddingHorizontal: 10, paddingTop: 22 },
   brandRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  brandRowCollapsed: { justifyContent: 'center' },
+  brandRowCollapsed: { flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start', gap: 10 },
   collapseButton: { width: 30, height: 30, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center', marginTop: 3 },
+  collapseButtonCollapsed: { width: 34, height: 34, marginTop: 0, borderRadius: 11 },
   brandDepth: { alignSelf: 'flex-start', backgroundColor: '#2F6B4F', borderRadius: 999, paddingBottom: 5, shadowColor: '#173F31', shadowOpacity: 0.22, shadowRadius: 12, shadowOffset: { width: 0, height: 7 }, elevation: 5 },
-  brandDepthCollapsed: { paddingBottom: 4 },
-  brandDepthHover: { paddingBottom: 7, transform: [{ translateY: -2 }, { scale: 1.025 }], shadowOpacity: 0.3, shadowRadius: 16, shadowOffset: { width: 0, height: 9 } },
-  brandDepthPressed: { paddingBottom: 2, transform: [{ translateY: 3 }, { scale: 0.99 }] },
+  brandDepthCollapsed: { paddingBottom: 5, alignSelf: 'center' },
+  brandDepthHover: { paddingBottom: 7, transform: [{ translateY: -1 }, { scale: 1.02 }], shadowOpacity: 0.3, shadowRadius: 16, shadowOffset: { width: 0, height: 9 } },
+  brandDepthPressed: { paddingBottom: 0, transform: [{ translateY: 6 }], shadowOpacity: 0.1, shadowRadius: 5, shadowOffset: { width: 0, height: 2 } },
   brandPill: { position: 'relative', overflow: 'hidden', borderColor: '#F4FBF6', borderWidth: 1, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 8, transform: [{ translateY: -1 }], flexDirection: 'row', alignItems: 'center', gap: 8 },
-  brandPillCollapsed: { width: 42, height: 42, paddingHorizontal: 0, paddingVertical: 0, justifyContent: 'center' },
+  brandPillCollapsed: { width: 44, height: 44, paddingHorizontal: 0, paddingVertical: 0, justifyContent: 'center' },
   brandPillHover: { borderColor: '#FFFFFF' },
   brandHighlight: { position: 'absolute', zIndex: 2, top: 2, left: 12, right: 12, height: 2, borderRadius: 999, backgroundColor: 'rgba(255,255,255,.76)' },
   brand: { zIndex: 1, color: '#163F30', fontSize: 22, fontWeight: '900', letterSpacing: -0.7 },
@@ -352,11 +355,12 @@ const s = StyleSheet.create({
   focusButtonText: { color: '#F4FBF6', fontSize: 11, fontWeight: '900' },
   resetButton: { width: 34, height: 32, borderRadius: 10, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   nav: { gap: 5, marginTop: 30 },
+  navCollapsed: { marginTop: 22, gap: 7 },
   item: { minHeight: 44, borderRadius: 11, flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, borderWidth: 1 },
-  itemCollapsed: { width: 46, paddingHorizontal: 0, justifyContent: 'center', alignSelf: 'center' },
+  itemCollapsed: { width: 44, height: 44, minHeight: 44, paddingHorizontal: 0, justifyContent: 'center', alignSelf: 'center', borderRadius: 12 },
   label: { fontSize: 14, fontWeight: '700', flex: 1 },
   ai: { flexDirection: 'row', gap: 10, borderWidth: 1, borderRadius: 13, padding: 12, marginBottom: 8, alignItems: 'center' },
-  aiCollapsed: { width: 46, height: 46, padding: 0, justifyContent: 'center', alignSelf: 'center' },
+  aiCollapsed: { width: 44, height: 44, padding: 0, justifyContent: 'center', alignSelf: 'center', borderRadius: 12 },
   aiTitle: { fontSize: 13, fontWeight: '800' },
   aiSub: { fontSize: 10, marginTop: 2 },
 });
