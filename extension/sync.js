@@ -37,17 +37,23 @@ async function collectCanvasData() {
   };
   const profile = await (await request("/api/v1/users/self/profile")).json();
   const courses = await list(
-    "/api/v1/courses?enrollment_state=active&include[]=total_scores&include[]=current_grading_period_scores&per_page=100",
+    "/api/v1/courses?enrollment_state=active&include[]=total_scores&include[]=current_grading_period_scores&include[]=syllabus_body&per_page=100",
   );
   const assignments = [],
     announcements = [],
     grades = [],
-    assignmentGroups = [];
+    assignmentGroups = [],
+    modules = [],
+    files = [],
+    pages = [];
   const completeCourseIds = {
     assignments: [],
     announcements: [],
     grades: [],
     assignmentGroups: [],
+    modules: [],
+    files: [],
+    pages: [],
   };
   for (const course of courses) {
     const courseId = String(course.id);
@@ -141,6 +147,74 @@ async function collectCanvasData() {
     } catch {
       /* Preserve the previous announcement snapshot on failure. */
     }
+    try {
+      const rows = await list(
+        `/api/v1/courses/${course.id}/modules?include[]=items&per_page=100`,
+      );
+      modules.push(
+        ...rows.map((module) => ({
+          id: String(module.id),
+          courseId,
+          name: module.name,
+          position: module.position,
+          state: module.state,
+          unlockAt: module.unlock_at,
+          prerequisiteModuleIds: (module.prerequisite_module_ids || []).map(String),
+          items: (Array.isArray(module.items) ? module.items : []).map((item) => ({
+            id: String(item.id),
+            moduleId: String(module.id),
+            title: item.title,
+            type: item.type,
+            position: item.position,
+            indent: item.indent || 0,
+            contentId: item.content_id == null ? undefined : String(item.content_id),
+            pageUrl: item.page_url,
+            htmlUrl: item.html_url,
+            completionRequirement: item.completion_requirement || null,
+          })),
+        })),
+      );
+      completeCourseIds.modules.push(courseId);
+    } catch {
+      /* Preserve the previous module snapshot on failure. */
+    }
+    try {
+      const rows = await list(`/api/v1/courses/${course.id}/files?per_page=100`);
+      files.push(
+        ...rows.map((file) => ({
+          id: String(file.id),
+          courseId,
+          displayName: file.display_name || file.filename || "File",
+          filename: file.filename,
+          contentType: file["content-type"] || file.content_type,
+          size: file.size,
+          updatedAt: file.updated_at || file.created_at,
+          htmlUrl: `${location.origin}/courses/${course.id}/files/${file.id}`,
+        })),
+      );
+      completeCourseIds.files.push(courseId);
+    } catch {
+      /* Preserve the previous file snapshot on failure. */
+    }
+    try {
+      const rows = await list(`/api/v1/courses/${course.id}/pages?per_page=100`);
+      pages.push(
+        ...rows
+          .filter((page) => page.published !== false)
+          .map((page) => ({
+            id: String(page.page_id ?? page.url),
+            courseId,
+            title: page.title,
+            url: page.url,
+            updatedAt: page.updated_at || page.created_at,
+            frontPage: !!page.front_page,
+            htmlUrl: `${location.origin}/courses/${course.id}/pages/${encodeURIComponent(page.url)}`,
+          })),
+      );
+      completeCourseIds.pages.push(courseId);
+    } catch {
+      /* Preserve the previous page snapshot on failure. */
+    }
   }
   return {
     source: "canvas",
@@ -154,6 +228,7 @@ async function collectCanvasData() {
         courseCode: c.course_code,
         startAt: c.start_at,
         endAt: c.end_at,
+        syllabusBody: c.syllabus_body || "",
         applyAssignmentGroupWeights: !!c.apply_assignment_group_weights,
         currentScore:
           e?.computed_current_score ?? e?.current_grading_period_score ?? null,
@@ -167,6 +242,9 @@ async function collectCanvasData() {
     announcements,
     grades,
     assignmentGroups,
+    modules,
+    files,
+    pages,
     completeCourseIds,
     syncedAt,
   };

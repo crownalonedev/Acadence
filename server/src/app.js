@@ -35,6 +35,9 @@ export function createApp(store, clock = () => new Date().toISOString()) {
         announcementCount: latest.announcements.length,
         gradeCount: latest.grades.length,
         assignmentGroupCount: latest.assignmentGroups.length,
+        moduleCount: latest.modules?.length || 0,
+        fileCount: latest.files?.length || 0,
+        pageCount: latest.pages?.length || 0,
         syncedAt: latest.receivedAt,
       };
     });
@@ -53,6 +56,9 @@ export function createApp(store, clock = () => new Date().toISOString()) {
       announcementCount: latest.announcements.length,
       gradeCount: latest.grades.length,
       assignmentGroupCount: latest.assignmentGroups.length,
+      moduleCount: latest.modules?.length || 0,
+      fileCount: latest.files?.length || 0,
+      pageCount: latest.pages?.length || 0,
       syncedAt: latest.receivedAt,
     });
   });
