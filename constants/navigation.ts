@@ -2,14 +2,14 @@ import { BookOpen, CalendarDays, CircleUserRound, FileText, GraduationCap, House
 export const navigationItems = {
   home: { label: 'Home', route: 'index', icon: House },
   courses: { label: 'Courses', route: 'courses', icon: BookOpen },
+  grades: { label: 'Grades', route: 'grades', icon: GraduationCap },
   tasks: { label: 'Tasks', route: 'tasks', icon: ListTodo },
   calendar: { label: 'Calendar', route: 'calendar', icon: CalendarDays },
   announcements: { label: 'Announcements', route: 'announcements', icon: Megaphone },
-  grades: { label: 'Grades', route: 'grades', icon: GraduationCap },
   inbox: { label: 'Inbox', route: 'inbox', icon: Inbox },
   files: { label: 'Files', route: 'files', icon: FileText },
   ai: { label: 'Acadence', route: 'ai', icon: Sparkles },
   profile: { label: 'You', route: 'settings', icon: CircleUserRound },
 } as const;
 export type NavigationItemId = keyof typeof navigationItems;
-export const defaultNavigation: NavigationItemId[] = ['home', 'courses', 'tasks', 'calendar', 'announcements', 'profile'];
+export const defaultNavigation: NavigationItemId[] = ['home', 'courses', 'grades', 'tasks', 'calendar', 'announcements', 'profile'];

@@ -1,0 +1,12 @@
+// Cloudflare Workers static-assets deployment (`npx wrangler deploy`).
+// Cloudflare Pages does not need this file — see README.md.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "acadence-marketing",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page"
+  }
+}

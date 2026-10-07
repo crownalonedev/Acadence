@@ -33,7 +33,7 @@ button.onclick = async () => {
       payload: result,
     });
     if (!response?.ok) throw new Error(response?.error || "Sync failed.");
-    status.textContent = `Synced ${response.courseCount} courses, ${response.assignmentCount} assignments, ${response.gradeCount || 0} grades and ${response.announcementCount || 0} announcements.`;
+    status.textContent = `Synced ${response.courseCount} courses, ${response.assignmentCount} assignments, ${response.moduleCount || 0} modules, ${response.fileCount || 0} files, ${response.pageCount || 0} pages, ${response.gradeCount || 0} grades and ${response.announcementCount || 0} announcements.`;
   } catch (error) {
     status.textContent = error.message || "Unable to sync Canvas.";
   } finally {
